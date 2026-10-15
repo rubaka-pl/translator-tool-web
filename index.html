@@ -440,12 +440,19 @@ async function gitUpload(f) {
   // части, у которых имя не совпало с главой (один .json, чужое имя в ZIP), раскладываем по главам по ключам строк
   const routed = parts.filter(([n]) => !names.has(n + ".json")), named = parts.filter(([n]) => names.has(n + ".json")), by = {};
   if (routed.length) {
-    const idx = new Map();
-    for (const x of names) if (x.endsWith(".json")) for (const l of (await get(x.slice(0, -5))).data.lines) { const k = String(l.key); (idx.get(k) || idx.set(k, []).get(k)).push(x.slice(0, -5)); }
+    const idx = new Map(), incs = [];
+    const add = async n => { for (const l of (await get(n)).data.lines) { const k = String(l.key); (idx.get(k) || idx.set(k, []).get(k)).push(n); } };
     for (const [, content] of routed) {
       let inc = content && Array.isArray(content.lines) ? content.lines : content;
       if (inc && !Array.isArray(inc) && typeof inc === "object") inc = Object.entries(inc).map(([key, v]) => ({key, new: v}));
       if (!Array.isArray(inc)) { skipped.push("(не тот формат)"); continue; }
+      incs.push(inc);
+    }
+    // сначала открытая глава: если все ключи в ней, остальные главы не качаем (в большой вкладке это минуты)
+    if (file && names.has(file + ".json")) await add(file);
+    if (incs.some(inc => inc.some(it => it && it.key !== undefined && !idx.has(String(it.key)))))
+      for (const x of names) if (x.endsWith(".json") && x.slice(0, -5) !== file) await add(x.slice(0, -5));
+    for (const inc of incs) {
       for (const it of inc) {
         if (!it || it.key === undefined) continue;
         const fs = idx.get(String(it.key));
