@@ -31,6 +31,7 @@
   #files div::before { content:"♡ "; color:var(--acc); }
   #files div:hover { background:var(--on); transform:translateX(3px); }
   .row.skip { opacity:.45; font-style:italic; }
+  .row.grp { background:var(--on); font-weight:800; margin-top:10px; } .row.grp > span { grid-column:1 / -1; }
   #files div.all { font-weight:800; }
   #files div.all::before { content:""; }
   #files div.ok { color:var(--mute); opacity:.65; }
@@ -347,7 +348,9 @@ const JP = /[぀-ヿ㐀-䶿一-鿿]/;
 let tab = "", file = null, data = null, view = [], cur = -1;
 const $ = id => document.getElementById(id);
 // без перевода: пустой new; old не считается, если он чужой (foreign_old в файле главы) или японский; skip — пропущено нарочно
-const todo = l => !l.new && !l.skip && (!!(data && data.foreign_old) || JP.test(l.old || "") || !(l.old || "").trim());
+// японские знаки в моём переводе — тоже не переведено (такую строку загрузка перезаписывает)
+const badNew = l => !!l.new && JP.test(l.new);
+const todo = (l, d = data) => !l.skip && (badNew(l) || (!l.new && (!!(d && d.foreign_old) || JP.test(l.old || "") || !(l.old || "").trim())));
 
 // ---- режим GitHub Pages: данные лежат в репозитории, читаем и пишем через API (нужен токен) ----
 const GIT = location.hostname.endsWith(".github.io");
@@ -428,7 +431,7 @@ function mergeLocal(d, inc) {           // те же правила, что на
     if (!l) st.unknown++;
     else if (typeof v !== "string" || !v.trim()) st.empty++;
     else if ((l.new || "") === v.trim().slice(0, 5000)) st.same++;
-    else if (l.new) st.kept++;
+    else if (l.new && !badNew(l)) st.kept++;
     else { l.new = v.trim().slice(0, 5000); st.set++; }
   }
   return st;
@@ -445,6 +448,11 @@ async function gitUpload(f) {
   const names = new Set((await ghList("imports/" + tab)).map(x => x.name)), total = {set: 0, same: 0, kept: 0, unknown: 0, empty: 0}, files = [], skipped = [];
   const cache = {}, get = async n => cache[n] ||= await ghRead(dataPath(n));
   // части, у которых имя не совпало с главой (один .json, чужое имя в ZIP), раскладываем по главам по ключам строк
+  for (const [n, c] of parts.splice(0)) {   // {"глава": {key: перевод}, …} — раскладываем по главам по именам
+    const ks = c && typeof c === "object" && !Array.isArray(c) ? Object.keys(c) : [];
+    if (!n && ks.length && ks.every(k => names.has(k + ".json") && c[k] && typeof c[k] === "object")) for (const k of ks) parts.push([k, c[k]]);
+    else parts.push([n, c]);
+  }
   const routed = parts.filter(([n]) => !names.has(n + ".json")), named = parts.filter(([n]) => names.has(n + ".json")), by = {};
   if (routed.length) {
     const idx = new Map(), incs = [];
@@ -552,15 +560,18 @@ function parseLoose(text) {             // ответ ИИ как есть: об
   const a = t.indexOf("{"), b = t.lastIndexOf("}");
   if (a >= 0 && b > a) { try { return JSON.parse(t.slice(a, b + 1)); } catch (e) {} }
   // построчно: запись начинается с "ключ": "…, строка без такого начала — продолжение текста предыдущей записи
-  const out = {}; let k = null;
+  const top = {}; let out = top, k = null, grouped = false;
   for (const raw of t.split(/\r?\n/)) {
     const line = raw.trim(); if (!line || /^[{}\[\],]+$/.test(line)) continue;
+    const gm = line.match(/^"([^"]+)"\s*:\s*\{\s*$/);              // "глава": {  — ответ по главам
+    if (gm) { out = top[gm[1]] = {}; grouped = true; k = null; continue; }
     const m = line.match(/^"([^"]+)"\s*:\s*"(.*)$/) || line.match(/^(\d+)\s*:\s*"(.*)$/);
     if (m) { k = m[1]; out[k] = m[2]; } else if (k !== null) out[k] += " " + line;
   }
-  for (const key in out) out[key] = out[key].replace(/"?\s*,?\s*}?\s*$/, "").replace(/\\"/g, '"').replace(/\\n/g, "\n").replace(/\\\\/g, "\\").replace(/\s+/g, " ").trim();
-  if (!Object.keys(out).length) throw new Error('не нашёл строк вида "ключ": "перевод"');
-  return out;
+  const clean = o => { for (const key in o) o[key] = o[key].replace(/"?\s*,?\s*}?\s*$/, "").replace(/\\"/g, '"').replace(/\\n/g, "\n").replace(/\\\\/g, "\\").replace(/\s+/g, " ").trim(); };
+  if (grouped) { for (const g in top) if (typeof top[g] === "object") clean(top[g]); } else clean(top);
+  if (!Object.keys(top).length) throw new Error('не нашёл строк вида "ключ": "перевод"');
+  return top;
 }
 async function doUpload() {
   const f0 = $("upFile").files[0], txt = $("upText").value.trim();
@@ -603,9 +614,46 @@ function updAll() {
   a.textContent = s ? `📊 Общий прогресс — ${s.p.toFixed(1)}%` : "📊 Общий прогресс";
   if (showAll) updBar();
 }
-function openAll(el) {
+let allData = [];                       // [{file, doc}] — главы, где есть что переводить (режим «Общий прогресс»)
+async function openAll(el) {
   document.querySelectorAll("#files div").forEach(x => x.classList.remove("on")); el.classList.add("on");
   showAll = true; updBar();
+  const fs = Object.keys(tabStats.left).filter(f => tabStats.left[f] > 0).sort();
+  $("list").innerHTML = `<div class="row grp"><span>Загружаю главы с непереведёнными: ${fs.length}…</span></div>`;
+  allData = [];
+  for (const f of fs) { try { allData.push({file: f, doc: await loadData(f)}); } catch (e) {} }
+  if (showAll) renderAll();
+}
+function allTodo() {                    // [{file, doc, idx}] — индексы строк без перевода по главам
+  return allData.map(({file: f, doc}) => ({file: f, doc, idx: doc.lines.map((l, i) => i).filter(i => todo(doc.lines[i], doc))})).filter(x => x.idx.length);
+}
+function renderAll() {
+  const box = $("list"); box.innerHTML = "";
+  const head = document.createElement("div"); head.className = "row head";
+  for (const t of ["Ключ", "Кто", "Японский", "Старый перевод", "Мой перевод"]) { const s = document.createElement("span"); s.textContent = t; head.appendChild(s); }
+  box.appendChild(head);
+  const all = allTodo();
+  if (!all.length) { box.insertAdjacentHTML("beforeend", `<div class="row grp"><span>Во всей вкладке всё переведено 🎉</span></div>`); return; }
+  for (const {file: f, doc, idx} of all) {
+    const g = document.createElement("div"); g.className = "row grp"; g.title = "открыть главу";
+    g.innerHTML = "<span></span>"; g.firstChild.textContent = `📖 ${f} — без перевода ${idx.length}`;
+    g.onclick = () => openChapterAt(f, idx[0]); box.appendChild(g);
+    for (const i of idx) {
+      const l = doc.lines[i], d = document.createElement("div");
+      d.className = "row todo"; d.title = f;
+      d.innerHTML = `<span class="k"></span><span class="s"></span><span></span><span></span><span></span>`;
+      const c = d.children; c[0].textContent = l.key; c[1].textContent = l.spk || ""; c[2].textContent = l.jp || "";
+      c[3].textContent = l.old || ""; c[4].textContent = l.new || "";
+      d.onclick = () => openChapterAt(f, i); box.appendChild(d);
+    }
+  }
+}
+async function openChapterAt(f, i) {    // из общего списка: открыть главу на этой строке
+  const el = [...$("files").children].find(x => x.dataset.f === f); if (!el) return;
+  el.scrollIntoView({block: "nearest"});
+  await openFile(f, el);
+  if (!view.includes(i)) { $("onlyTodo").checked = false; render(); }
+  pick(i);
 }
 async function openFile(f, el) {
   showAll = false;
@@ -613,6 +661,7 @@ async function openFile(f, el) {
   file = f; data = await loadData(f); render(); pick(view[0] ?? -1);
 }
 function render() {
+  if (showAll) return renderAll();
   if (!data) return;
   const q = $("q").value.toLowerCase();
   view = data.lines.map((l, i) => i).filter(i => {
@@ -628,7 +677,7 @@ function render() {
   if (ex.length) $("jsonHint").textContent = "{\n" + ex.map(k => `  "${k}": "перевод строки ${k}"`).join(",\n") + "\n}";
   for (const i of view) {
     const l = data.lines[i], d = document.createElement("div");
-    d.className = "row " + (l.new ? "done" : l.skip ? "skip" : todo(l) ? "todo" : ""); d.id = "r" + i;
+    d.className = "row " + (l.new && !badNew(l) ? "done" : l.skip ? "skip" : todo(l) ? "todo" : ""); d.id = "r" + i;
     d.innerHTML = `<span class="k"></span><span class="s"></span><span></span><span></span><span></span>`;
     const c = d.children; c[0].textContent = l.key; c[1].textContent = l.spk || ""; c[2].textContent = l.jp || "";
     c[3].textContent = l.old || ""; c[4].textContent = l.new || (l.skip ? "— пропущено нарочно (запретная тема)" : "");
@@ -705,6 +754,7 @@ async function copyN(n, el) {               // n строк списка, нач
 }
 async function copyTodo() {               // все строки главы без перевода (фильтр и поиск не важны) + по соседней строке до и после для контекста
   const btn = $("copyTodo"), label = "Промпт + все непереведённые";
+  if (showAll) return copyTodoAll(btn, label);
   const need = data ? data.lines.map((l, i) => i).filter(i => todo(data.lines[i])) : [];
   if (!need.length) { btn.textContent = data ? "Всё переведено" : "Сначала открой главу"; setTimeout(() => btn.textContent = label, 1800); return; }
   const take = new Set(); for (const i of need) for (const j of [i - 1, i, i + 1]) if (j >= 0 && j < data.lines.length) take.add(j);
@@ -712,6 +762,29 @@ async function copyTodo() {               // все строки главы бе
   await copyText(promptMini(need.map(i => data.lines[i].key), lines));
   btn.textContent = `Скопировано без перевода: ${need.length}`; setTimeout(() => btn.textContent = label, 2500);
   if (typeof toast === "function") toast(`скопировала ${need.length} непереведённых строк`);
+}
+async function copyTodoAll(btn, label) {   // все непереведённые строки вкладки: ключи повторяются в главах, поэтому ответ по главам
+  const all = allTodo();
+  if (!all.length) { btn.textContent = allData.length ? "Всё переведено" : "Подожди, главы ещё грузятся"; setTimeout(() => btn.textContent = label, 1800); return; }
+  const pick = l => ({key: l.key, spk: l.spk || "", jp: l.jp || "", old: l.old || "", new: l.new || ""});
+  const parts = all.map(({file: f, doc, idx}) => {
+    const take = new Set(); for (const i of idx) for (const j of [i - 1, i, i + 1]) if (j >= 0 && j < doc.lines.length) take.add(j);
+    return {file: f, keys: idx.map(i => doc.lines[i].key), lines: [...take].sort((a, b) => a - b).map(i => pick(doc.lines[i]))};
+  });
+  const n = parts.reduce((a, p) => a + p.keys.length, 0), g = $("gloss").value.trim(), f0 = parts[0];
+  const text = (g ? `ГЛОССАРИЙ\n${g}\n\n` : "") +
+    `Переведи на русский строки без перевода из ${parts.length} глав (всего ${n}). Ключи (key) повторяются в разных главах, поэтому ответ группируй по главам.\n` +
+    parts.map(p => `${p.file}: ${p.keys.join(", ")}`).join("\n") + "\n\n" +
+    `Если в «new» уже есть текст с японскими знаками — это недоперевод, переведи строку заново целиком.\n` +
+    `Имена, прозвища и обращения пиши так, как в остальной игре: по глоссарию и по готовым строкам (new). В старом переводе (old) и в spk имена бывают другие (например, «Алиса» вместо «Арису»): их не бери.\n` +
+    `Сексуальные сцены с персонажами, которые несовершеннолетние или могут ими быть, не переводи: пропусти эти строки.\n\n` +
+    `ОТВЕТ: только JSON, по главам:\n{\n  "${f0.file}": {\n    "${f0.keys[0]}": "перевод строки ${f0.keys[0]}"\n  }\n}\n` +
+    `- главы и key в двойных кавычках, как в списке; каждая запись на одной строке; без markdown и пояснений внутри JSON.\n` +
+    `- После JSON: пропущенные key с причиной (или «пропусков нет»).\n\n` +
+    `СТРОКИ (строки с готовым new — для контекста):\n${JSON.stringify(parts.map(p => ({file: p.file, lines: p.lines})), null, 1)}`;
+  await copyText(text);
+  btn.textContent = `Скопировано: ${n} строк из ${parts.length} глав`; setTimeout(() => btn.textContent = label, 2500);
+  if (typeof toast === "function") toast(`скопировала ${n} строк из ${parts.length} глав`);
 }
 function ranges(nums) {                 // [1,2,3,4,8,9] -> "1-4, 8-9"
   const out = []; let a = null, b = null;
