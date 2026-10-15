@@ -161,18 +161,36 @@ async function gitUpload(f) {
     if (new Uint8Array(buf.slice(0, 2)).join() === "80,75") {
       const z = await JSZip.loadAsync(buf);
       for (const n of Object.keys(z.files)) if (n.endsWith(".json") && !z.files[n].dir) parts.push([n.split("/").pop().slice(0, -5), JSON.parse(await z.files[n].async("string"))]);
-    } else parts.push([file || "", JSON.parse(new TextDecoder().decode(buf))]);
+    } else parts.push(["", JSON.parse(new TextDecoder().decode(buf))]);
   } catch (e) { return {ok: false, error: "Не разобрать файл: " + e.message}; }
   const names = new Set((await ghList("imports/" + tab)).map(x => x.name)), total = {set: 0, same: 0, kept: 0, unknown: 0, empty: 0}, files = [], skipped = [];
-  for (const [name, content] of parts) {
-    if (!name || !names.has(name + ".json")) { skipped.push(name || "(без имени — открой файл и повтори)"); continue; }
-    const {data: d, sha} = await ghRead(dataPath(name)), before = JSON.parse(JSON.stringify(d));
+  const cache = {}, get = async n => cache[n] ||= await ghRead(dataPath(n));
+  // части, у которых имя не совпало с главой (один .json, чужое имя в ZIP), раскладываем по главам по ключам строк
+  const routed = parts.filter(([n]) => !names.has(n + ".json")), named = parts.filter(([n]) => names.has(n + ".json")), by = {};
+  if (routed.length) {
+    const idx = new Map();
+    for (const x of names) if (x.endsWith(".json")) for (const l of (await get(x.slice(0, -5))).data.lines) { const k = String(l.key); (idx.get(k) || idx.set(k, []).get(k)).push(x.slice(0, -5)); }
+    for (const [, content] of routed) {
+      let inc = content && Array.isArray(content.lines) ? content.lines : content;
+      if (inc && !Array.isArray(inc) && typeof inc === "object") inc = Object.entries(inc).map(([key, v]) => ({key, new: v}));
+      if (!Array.isArray(inc)) { skipped.push("(не тот формат)"); continue; }
+      for (const it of inc) {
+        if (!it || it.key === undefined) continue;
+        const fs = idx.get(String(it.key));
+        if (!fs) { total.unknown++; continue; }
+        (by[fs.includes(file) ? file : fs[0]] ||= []).push(it);        // ключ есть в нескольких главах — берём открытую
+      }
+    }
+  }
+  for (const [name, content] of [...named, ...Object.entries(by)]) {
+    const {data: d, sha} = await get(name), before = JSON.parse(JSON.stringify(d));
     const st = mergeLocal(d, content && Array.isArray(content.lines) ? content.lines : content);
     if (st.set) {                       // копия до загрузки лежит в репозитории рядом
       const ts = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
       await ghWrite(`backup/history/${tab}__${name}/${ts}.json`, before, null, "Бэкап перед загрузкой: " + name);
       const r = await ghWrite(dataPath(name), d, sha, "Загрузка перевода: " + name);
       if (!r.ok) return {ok: false, error: `GitHub ответил ${r.status} на ${name}`};
+      delete cache[name];               // sha изменился: если в эту главу придёт ещё часть, прочитаем заново
     }
     files.push({...st, file: name}); for (const k in total) total[k] += st[k];
   }
@@ -316,7 +334,7 @@ async function copyPrompt() {           // короткий промпт для 
       `8. Строки, где new уже заполнен, переводить заново нельзя: не включай их в ответ.\n\n` +
       `ОТВЕТ\n` +
       `Только JSON {"key": "перевод"} для переведённых строк, key бери из файла, кодировка UTF-8. Без кода, без пояснений внутри JSON и без markdown. После JSON отдельным абзацем: список пропущенных key с причиной (или «пропусков нет»). Я загружу JSON на сайте кнопкой «Загрузить перевод».\n` +
-      `Если можешь отдавать файлы: назови файл ответа ${file}.json. Если глав несколько, для каждой сделай отдельный JSON с именем главы (например, 003_scene_02.json и 004_scene_03.json) и сложи все в один ZIP: сайт разнесёт их по главам сам, за одну загрузку. Имя файла должно точно совпадать с названием главы.`
+      `Если можешь отдавать файлы: назови файл ответа ${file}.json. Если глав несколько, можно одним общим JSON {"key": "перевод"} со всеми строками: сайт сам разложит их по главам по key. Или для каждой главы отдельный JSON с её именем (например, 003_scene_02.json и 004_scene_03.json) в одном ZIP.`
     : `Глава: ${file}\nВсё переведено.`;
   try { await navigator.clipboard.writeText(text); }
   catch (e) { const t = document.createElement("textarea"); t.value = text; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); }
