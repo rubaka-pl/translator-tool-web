@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Перевод строк</title>
+<style>
+  :root { --bg:#f6f6f4; --panel:#fff; --line:#ddd; --ink:#222; --mute:#777; --acc:#2a5db0; --done:#e8f3e8; --todo:#fff6e0; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.45 "Segoe UI", system-ui, sans-serif; background:var(--bg); color:var(--ink); display:flex; height:100vh; }
+  #side { width:300px; border-right:1px solid var(--line); background:var(--panel); display:flex; flex-direction:column; }
+  #side h1 { font-size:15px; margin:12px; }
+  #files { overflow:auto; flex:1; }
+  #files div { padding:6px 12px; cursor:pointer; border-bottom:1px solid #f0f0f0; font-size:13px; }
+  #files div.on { background:#e6eefb; font-weight:600; }
+  #files small { color:var(--mute); float:right; }
+  #main { flex:1; display:flex; flex-direction:column; min-width:0; }
+  #top { padding:8px 12px; border-bottom:1px solid var(--line); background:var(--panel); display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  #list { flex:1; overflow:auto; }
+  .row { display:grid; grid-template-columns:64px 80px 1fr 1fr 1fr; gap:8px; padding:6px 12px; border-bottom:1px solid #eee; cursor:pointer; font-size:13px; }
+  .row.todo { background:var(--todo); } .row.done { background:var(--done); }
+  .row.on { outline:2px solid var(--acc); outline-offset:-2px; }
+  .k { color:var(--mute); } .s { color:var(--acc); }
+  #ed { border-top:1px solid var(--line); background:var(--panel); padding:10px 12px; }
+  #ed .src { margin:2px 0; }
+  #ed .src b { display:inline-block; width:70px; color:var(--mute); font-weight:500; }
+  textarea { width:100%; height:70px; font:16px "Segoe UI", sans-serif; padding:6px; margin-top:6px; }
+  button { font:inherit; padding:4px 10px; cursor:pointer; }
+  #st { color:var(--mute); font-size:13px; }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body>
+<div id="side"><div id="tabs" style="display:flex;gap:4px;padding:8px 8px 0;flex-wrap:wrap"></div><details id="imp" style="margin:8px 12px 0"><summary style="cursor:pointer;font-weight:600">Врата Извлечения</summary>
+  <div style="margin-top:6px"><button style="width:100%;margin-bottom:4px" onclick="browse()">Указать обитель игры…</button>
+  <input id="impPath" placeholder="или вставь путь к папке игры" style="width:100%;padding:4px 6px">
+  <input id="impName" placeholder="имя вкладки (необязательно)" style="width:100%;padding:4px 6px;margin-top:4px">
+  <button id="impGo" style="margin-top:4px;width:100%" onclick="doImport()">Свершить ритуал извлечения</button>
+  <pre id="impLog" style="white-space:pre-wrap;font-size:11px;color:#555;max-height:120px;overflow:auto;margin:4px 0 0"></pre></div></details>
+  <div id="gitbox" style="margin:8px 12px 0">
+    <div id="tokrow" style="display:none"><input id="tok" type="password" placeholder="токен GitHub (один раз, хранится только в этом браузере)" style="width:100%;padding:4px 6px"><button style="width:100%;margin-top:4px" onclick="setToken()">Войти</button></div>
+    <button id="syncBtn" style="width:100%" onclick="syncNow()">Отправить в GitHub</button>
+    <div id="gitst" style="font-size:11px;color:#777;margin-top:3px"></div>
+  </div>
+  <details id="xfer" style="margin:8px 12px 0"><summary style="cursor:pointer;font-weight:600">Выгрузка / загрузка</summary>
+  <div style="margin-top:6px"><button style="width:100%" onclick="doExport()">Выгрузить вкладку (ZIP)</button>
+  <input type="file" id="upFile" accept=".zip,.json" style="width:100%;margin-top:6px;font-size:12px">
+  <button id="upGo" style="width:100%;margin-top:4px" onclick="doUpload()">Загрузить перевод</button>
+  <div style="font-size:11px;color:#777;margin-top:4px">ZIP или .json из выгрузки; также можно {"ключ": "перевод"} — он пойдёт в открытый файл. Заполненные (зелёные) строки не трогаются.</div>
+  <pre id="upLog" style="white-space:pre-wrap;font-size:11px;color:#555;max-height:140px;overflow:auto;margin:4px 0 0"></pre></div></details>
+  <h1>Файлы</h1><div id="files"></div><div id="dir" style="padding:8px 12px;color:#999;font-size:11px"></div></div>
+<div id="main">
+  <div id="top">
+    <label><input type="checkbox" id="onlyTodo" checked> только без перевода</label>
+    <input id="q" placeholder="поиск…" style="padding:4px 6px">
+    <span id="st"></span>
+  </div>
+  <div id="list"></div>
+  <div id="ed">
+    <div class="src"><b>№ / кто</b><span id="eKey"></span></div>
+    <div class="src"><b>Японский</b><span id="eJp"></span> <button onclick="cp('jp')">копировать</button></div>
+    <div class="src"><b>Старый</b><span id="eOld"></span> <button onclick="cp('old')">копировать</button></div>
+    <textarea id="eNew" placeholder="Мой перевод. Enter — сохранить и дальше, Shift+Enter — перенос строки"></textarea>
+    <button onclick="save(true)">Сохранить и дальше (Enter)</button>
+    <button onclick="move(-1)">← назад</button> <button onclick="move(1)">вперёд →</button>
+  </div>
+</div>
+<script>
+const JP = /[぀-ヿ㐀-䶿一-鿿]/;
+let tab = "", file = null, data = null, view = [], cur = -1;
+const $ = id => document.getElementById(id);
+const todo = l => !l.new && (JP.test(l.old || "") || !(l.old || "").trim());
+
+// ---- режим GitHub Pages: данные лежат в репозитории, читаем и пишем через API (нужен токен) ----
+const GIT = location.hostname.endsWith(".github.io");
+const DATA_REPO = "rubaka-pl/translator-tool", BRANCH = "master";
+let TOKEN = ""; try { TOKEN = localStorage.ghToken || ""; } catch (e) {}
+const pending = {};                    // путь файла -> {ключ: перевод}, ещё не отправленные в репозиторий
+let flushTimer = null, flushing = false;
+const enc = p => p.split("/").map(encodeURIComponent).join("/");
+const setGit = t => { $("gitst").textContent = t; };
+const dataPath = f => `imports/${tab}/${f}.json`;
+async function ghApi(path, opt = {}) {
+  const r = await fetch(`https://api.github.com/repos/${DATA_REPO}/contents/${enc(path)}` + (opt.method ? "" : "?ref=" + BRANCH),
+    {...opt, headers: {Authorization: "Bearer " + TOKEN, Accept: "application/vnd.github+json"}});
+  if (r.status === 401) showToken("Токен не подошёл — вставь заново");
+  return r;
+}
+const b64text = c => new TextDecoder().decode(Uint8Array.from(atob(c.replace(/\s/g, "")), ch => ch.charCodeAt(0)));
+const toB64 = s => { const b = new TextEncoder().encode(s); let t = ""; for (let i = 0; i < b.length; i += 8192) t += String.fromCharCode(...b.subarray(i, i + 8192)); return btoa(t); };
+async function ghList(path) { const r = await ghApi(path); if (!r.ok) throw new Error(path + ": " + r.status); return r.json(); }
+async function ghRead(path) { const r = await ghApi(path); if (!r.ok) throw new Error(path + ": " + r.status); const j = await r.json(); return {data: JSON.parse(b64text(j.content)), sha: j.sha}; }
+function ghWrite(path, obj, sha, message) {
+  return ghApi(path, {method: "PUT", body: JSON.stringify({message, branch: BRANCH, content: toB64(JSON.stringify(obj, null, 1)), ...(sha ? {sha} : {})})});
+}
+function showToken(msg) { $("tokrow").style.display = ""; setGit(msg || "Нужен токен GitHub"); }
+function setToken() {
+  TOKEN = $("tok").value.trim(); if (!TOKEN) return;
+  try { localStorage.ghToken = TOKEN; } catch (e) {}
+  $("tokrow").style.display = "none"; setGit(""); loadFiles().catch(e => setGit("Ошибка: " + e.message));
+}
+async function flush() {                // отправляет накопленные правки одним коммитом на файл
+  clearTimeout(flushTimer); flushTimer = null;
+  if (flushing) { flushTimer = setTimeout(flush, 2000); return; }
+  flushing = true;
+  try {
+    for (const path of Object.keys(pending)) {
+      const edits = pending[path]; let done = false;
+      setGit("Отправляю: " + path.split("/").pop());
+      for (let n = 0; n < 3 && !done; n++) {        // 409/422 — файл успел измениться, читаем заново и повторяем
+        const {data: d, sha} = await ghRead(path);
+        const by = new Map(d.lines.map(l => [l.key, l]));
+        for (const [k, v] of Object.entries(edits)) { const l = by.get(k); if (l) l.new = v; }   // только поле new
+        const r = await ghWrite(path, d, sha, "Перевод: " + path.split("/").pop().replace(/\.json$/, ""));
+        if (r.ok) { done = true; if (pending[path] === edits) delete pending[path]; }
+        else if (r.status !== 409 && r.status !== 422) throw new Error("GitHub ответил " + r.status);
+      }
+      if (!done) throw new Error("не удалось записать " + path);
+    }
+    setGit(Object.keys(pending).length ? "" : "Всё сохранено в репозитории");
+  } catch (e) { setGit("Ошибка отправки: " + e.message + " (правки не потеряны, повторю)"); flushTimer = setTimeout(flush, 15000); }
+  flushing = false;
+}
+window.addEventListener("beforeunload", e => { if (Object.keys(pending).length) { e.preventDefault(); e.returnValue = ""; } });
+async function syncNow() {
+  if (GIT) return flush();
+  setGit("Отправляю…");
+  try { setGit((await (await fetch("/api/sync", {method: "POST", body: "{}"})).json()).msg); } catch (e) { setGit("Ошибка: " + e); }
+}
+async function gitFiles() {
+  if (!TOKEN) { showToken(); return {tabs: [], files: [], dir: ""}; }
+  const tabs = (await ghList("imports")).filter(x => x.type === "dir").map(x => x.name);
+  if (!tab) tab = tabs[0];
+  const files = (await ghList("imports/" + tab)).filter(x => x.name.endsWith(".json")).map(x => x.name.slice(0, -5));
+  return {tabs, files, dir: DATA_REPO + "/imports/" + tab};
+}
+async function loadData(f) {
+  if (!GIT) return (await fetch("/api/file/" + encodeURIComponent(f) + "?tab=" + encodeURIComponent(tab))).json();
+  const d = (await ghRead(dataPath(f))).data, ed = pending[dataPath(f)] || {};
+  for (const l of d.lines) if (l.key in ed) l.new = ed[l.key];
+  return d;
+}
+function mergeLocal(d, inc) {           // те же правила, что на сервере: только пустые строки, заполненные не трогаем
+  if (!Array.isArray(inc)) inc = Object.entries(inc).map(([key, v]) => ({key, new: v}));
+  const st = {set: 0, same: 0, kept: 0, unknown: 0, empty: 0}, by = new Map(d.lines.map(l => [l.key, l]));
+  for (const it of inc) {
+    if (!it || it.key === undefined) continue;
+    const l = by.get(String(it.key)), v = it.new;
+    if (!l) st.unknown++;
+    else if (typeof v !== "string" || !v.trim()) st.empty++;
+    else if ((l.new || "") === v.trim().slice(0, 5000)) st.same++;
+    else if (l.new) st.kept++;
+    else { l.new = v.trim().slice(0, 5000); st.set++; }
+  }
+  return st;
+}
+async function gitUpload(f) {
+  await flush();
+  const buf = await f.arrayBuffer(), parts = [];
+  try {
+    if (new Uint8Array(buf.slice(0, 2)).join() === "80,75") {
+      const z = await JSZip.loadAsync(buf);
+      for (const n of Object.keys(z.files)) if (n.endsWith(".json") && !z.files[n].dir) parts.push([n.split("/").pop().slice(0, -5), JSON.parse(await z.files[n].async("string"))]);
+    } else parts.push([file || "", JSON.parse(new TextDecoder().decode(buf))]);
+  } catch (e) { return {ok: false, error: "Не разобрать файл: " + e.message}; }
+  const names = new Set((await ghList("imports/" + tab)).map(x => x.name)), total = {set: 0, same: 0, kept: 0, unknown: 0, empty: 0}, files = [], skipped = [];
+  for (const [name, content] of parts) {
+    if (!name || !names.has(name + ".json")) { skipped.push(name || "(без имени — открой файл и повтори)"); continue; }
+    const {data: d, sha} = await ghRead(dataPath(name)), before = JSON.parse(JSON.stringify(d));
+    const st = mergeLocal(d, content && Array.isArray(content.lines) ? content.lines : content);
+    if (st.set) {                       // копия до загрузки лежит в репозитории рядом
+      const ts = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
+      await ghWrite(`backup/history/${tab}__${name}/${ts}.json`, before, null, "Бэкап перед загрузкой: " + name);
+      const r = await ghWrite(dataPath(name), d, sha, "Загрузка перевода: " + name);
+      if (!r.ok) return {ok: false, error: `GitHub ответил ${r.status} на ${name}`};
+    }
+    files.push({...st, file: name}); for (const k in total) total[k] += st[k];
+  }
+  return {ok: true, total, files, skipped};
+}
+async function doExport() {
+  if (!GIT) { location.href = "/api/export?tab=" + encodeURIComponent(tab); return; }
+  await flush();
+  const z = new JSZip();
+  for (const x of (await ghList("imports/" + tab)).filter(x => x.name.endsWith(".json"))) z.file(x.name, JSON.stringify((await ghRead("imports/" + tab + "/" + x.name)).data, null, 1));
+  const a = document.createElement("a"); a.href = URL.createObjectURL(await z.generateAsync({type: "blob"})); a.download = tab + ".zip"; a.click();
+}
+
+async function loadFiles() {
+  const r = GIT ? await gitFiles() : await (await fetch("/api/files?tab=" + encodeURIComponent(tab))).json();
+  if (!tab) tab = r.tabs[0];
+  $("tabs").innerHTML = "";
+  if (r.tabs.length > 1) for (const t of r.tabs) {
+    const b = document.createElement("button"); b.textContent = t;
+    b.style.fontWeight = t === tab ? "700" : "400"; b.onclick = () => { tab = t; file = null; data = null; $("list").innerHTML = ""; loadFiles(); };
+    $("tabs").appendChild(b);
+  }
+  $("dir").textContent = r.dir;
+  $("files").innerHTML = "";
+  for (const f of r.files) {
+    const d = document.createElement("div"); d.textContent = f; d.onclick = () => openFile(f, d);
+    $("files").appendChild(d);
+  }
+}
+async function browse() {
+  const r = await (await fetch("/api/browse", {method: "POST", body: "{}"})).json();
+  if (r.path) { $("impPath").value = r.path; $("impName").placeholder = r.path.split(/[\\/]/).pop(); }
+}
+async function doImport() {
+  const b = $("impGo"); b.disabled = true; $("impLog").textContent = "Работаю… (распаковка может занять минуту)";
+  try {
+    const r = await (await fetch("/api/import", {method: "POST", body: JSON.stringify({path: $("impPath").value, name: $("impName").value})})).json();
+    $("impLog").textContent = r.log.join("\n");
+    if (r.ok) { tab = r.tab; file = null; data = null; $("list").innerHTML = ""; await loadFiles(); }
+  } catch (e) { $("impLog").textContent = "Ошибка: " + e; }
+  b.disabled = false;
+}
+async function doUpload() {
+  const f = $("upFile").files[0]; if (!f) { $("upLog").textContent = "Выбери файл"; return; }
+  const b = $("upGo"); b.disabled = true; $("upLog").textContent = "Загружаю…";
+  try {
+    const url = "/api/upload?tab=" + encodeURIComponent(tab) + "&file=" + encodeURIComponent(file || "");
+    const r = GIT ? await gitUpload(f) : await (await fetch(url, {method: "POST", body: await f.arrayBuffer()})).json();
+    if (!r.ok) $("upLog").textContent = r.error;
+    else {
+      const t = r.total;
+      $("upLog").textContent = `записано ${t.set} · такие же ${t.same} · не тронуто заполненных ${t.kept} · пустых ${t.empty} · чужих ключей ${t.unknown}` +
+        (r.skipped.length ? "\nнет такого файла: " + r.skipped.join(", ") : "") + "\n" + r.files.map(x => `${x.file}: +${x.set}`).join("\n");
+      if (file) { data = await loadData(file); render(); pick(view[0] ?? -1); }
+    }
+  } catch (e) { $("upLog").textContent = "Ошибка: " + e; }
+  b.disabled = false;
+}
+async function openFile(f, el) {
+  document.querySelectorAll("#files div").forEach(x => x.classList.remove("on")); el.classList.add("on");
+  file = f; data = await loadData(f); render(); pick(view[0] ?? -1);
+}
+function render() {
+  if (!data) return;
+  const q = $("q").value.toLowerCase();
+  view = data.lines.map((l, i) => i).filter(i => {
+    const l = data.lines[i];
+    if ($("onlyTodo").checked && !todo(l)) return false;
+    return !q || [l.key, l.spk, l.jp, l.old, l.new].join(" ").toLowerCase().includes(q);
+  });
+  const box = $("list"); box.innerHTML = "";
+  for (const i of view) {
+    const l = data.lines[i], d = document.createElement("div");
+    d.className = "row " + (l.new ? "done" : todo(l) ? "todo" : ""); d.id = "r" + i;
+    d.innerHTML = `<span class="k"></span><span class="s"></span><span></span><span></span><span></span>`;
+    const c = d.children; c[0].textContent = l.key; c[1].textContent = l.spk || ""; c[2].textContent = l.jp || "";
+    c[3].textContent = l.old || ""; c[4].textContent = l.new || "";
+    d.onclick = () => pick(i); box.appendChild(d);
+  }
+  const left = data.lines.filter(todo).length, mine = data.lines.filter(l => l.new).length;
+  $("st").textContent = `строк ${data.lines.length} · моих ${mine} · без перевода ${left}`;
+}
+function pick(i) {
+  document.querySelectorAll(".row.on").forEach(x => x.classList.remove("on"));
+  cur = i; if (i < 0 || !data) return;
+  const l = data.lines[i];
+  $("eKey").textContent = l.key + "  " + (l.spk || ""); $("eJp").textContent = l.jp || ""; $("eOld").textContent = l.old || "";
+  $("eNew").value = l.new || ""; $("eNew").focus();
+  const r = $("r" + i); if (r) { r.classList.add("on"); r.scrollIntoView({block: "nearest"}); }
+}
+async function save(next) {
+  if (cur < 0) return;
+  const i = cur, v = $("eNew").value.trim();
+  data.lines[i].new = v;
+  if (GIT) {                            // копим правки и отправляем в репозиторий через 10 секунд после последней
+    (pending[dataPath(file)] ||= {})[data.lines[i].key] = v;
+    clearTimeout(flushTimer); flushTimer = setTimeout(flush, 10000);
+    setGit("Не отправлено строк: " + Object.values(pending).reduce((a, p) => a + Object.keys(p).length, 0));
+  } else await fetch("/api/save/" + encodeURIComponent(file) + "?tab=" + encodeURIComponent(tab), {method: "POST", body: JSON.stringify({i, new: v})});
+  const pos = view.indexOf(i), nxt = view[pos + 1];
+  render(); if (next) pick(nxt ?? (view[0] ?? -1)); else pick(i);
+}
+function move(d) { const p = view.indexOf(cur); const n = view[p + d]; if (n !== undefined) pick(n); }
+function cp(f) { if (cur >= 0) navigator.clipboard.writeText(data.lines[cur][f] || ""); }
+$("eNew").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); save(true); } });
+$("onlyTodo").onchange = () => { render(); pick(view[0] ?? -1); };
+$("q").oninput = render;
+if (GIT) { $("imp").style.display = "none"; $("syncBtn").textContent = "Отправить в репозиторий сейчас"; }
+loadFiles().catch(e => setGit("Ошибка: " + e.message));
+</script>
+</body>
+</html>
