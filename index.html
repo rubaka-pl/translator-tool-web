@@ -692,9 +692,26 @@ function promptText(idx, att) {        // idx — key строк на перев
       `- Кодировка UTF-8, без кода, без пояснений внутри JSON и без markdown. После JSON отдельным абзацем: список пропущенных key с причиной (или «пропусков нет»). Потом блок «НОВОЕ В ГЛОССАРИЙ»: имена, прозвища и термины, которых нет в глоссарии выше, по строке «оригинал — перевод (примечание)», или «нового нет». Я вставлю JSON на сайте в поле «Вставь сырой JSON».\n` +
       `Если можешь отдавать файлы: назови файл ответа ${file}.json. Если глав несколько, можно одним общим JSON {"key": "перевод"} со всеми строками: сайт сам разложит их по главам по key. Или для каждой главы отдельный JSON с её именем (например, 003_scene_02.json и 004_scene_03.json) в одном ZIP.` +
       (att ? `\n\nСТРОКИ (глава ${file}):\n${JSON.stringify({file, lines: att}, null, 1)}` : "")
-    : `Глава: ${file}\n${att ? "В выбранных строках всё уже переведено." : "Всё переведено."}`;
+    : `Глава: ${file}\n${att ? "В выбранных строках всё уже переведено." : "Всё переведено."}` +
+      (att && $("gloss").value.trim() ? `\n\nГЛОССАРИЙ (имена и термины этой игры)\n${$("gloss").value.trim()}` : "") +
+      (att ? `\n\nСТРОКИ (глава ${file}):\n${JSON.stringify({file, lines: att}, null, 1)}` : "");
 }
 function cp(f) { if (cur >= 0) navigator.clipboard.writeText(data.lines[cur][f] || ""); }
+// Ctrl+C по выделенным мышью строкам списка: в буфер идёт промпт с глоссарием и эти строки в JSON (в полях ввода копирование обычное)
+document.addEventListener("copy", e => {
+  if (!data || e.target.closest && e.target.closest("textarea, input")) return;
+  const sel = document.getSelection(); if (!sel || sel.isCollapsed) return;
+  const sr = sel.getRangeAt(0), rr = document.createRange();
+  const idx = view.filter(i => {               // строка входит, только если выделение реально заходит на её текст, а не касается края
+    const r = $("r" + i); if (!r) return false; rr.selectNodeContents(r);
+    return sr.compareBoundaryPoints(Range.START_TO_END, rr) > 0 && sr.compareBoundaryPoints(Range.END_TO_START, rr) < 0;
+  });
+  if (!idx.length) return;
+  const lines = idx.map(i => { const l = data.lines[i]; return {key: l.key, spk: l.spk || "", jp: l.jp || "", old: l.old || "", new: l.new || ""}; });
+  e.clipboardData.setData("text/plain", promptText(idx.filter(i => todo(data.lines[i])).map(i => data.lines[i].key), lines));
+  e.preventDefault();
+  if (typeof toast === "function") toast(`промпт + ${lines.length} строк`);
+});
 $("eNew").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); save(true); } });
 $("onlyTodo").onchange = () => { render(); pick(view[0] ?? -1); };
 $("q").oninput = render;
