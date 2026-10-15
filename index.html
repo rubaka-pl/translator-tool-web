@@ -30,6 +30,8 @@
   #files div { padding:7px 12px; margin:3px 0; cursor:pointer; border-radius:12px; font-size:13px; transition:background .15s, transform .15s; }
   #files div::before { content:"♡ "; color:var(--acc); }
   #files div:hover { background:var(--on); transform:translateX(3px); }
+  #files div.ok { color:var(--mute); opacity:.65; }
+  #files div.ok::before { content:"✓ "; color:var(--mute); }
   #files div.on { background:linear-gradient(90deg, var(--acc), var(--acc2)); color:#fff; font-weight:800; }
   #files div.on::before { content:"❤ "; color:#fff; }
   #main { flex:1; display:flex; flex-direction:column; min-width:0; margin:10px; gap:10px; }
@@ -404,7 +406,8 @@ async function gitFiles() {
   const tabs = (await ghList("imports")).filter(x => x.type === "dir").map(x => x.name);
   if (!tab) tab = tabs[0];
   const files = (await ghList("imports/" + tab)).filter(x => x.name.endsWith(".json")).map(x => x.name.slice(0, -5));
-  return {tabs, files, dir: DATA_REPO + "/imports/" + tab};
+  let left = {}; try { left = (await ghRead("stats/" + tab + ".json")).data; } catch (e) {}   // сколько непереведённых в каждой главе (пишет выгрузка)
+  return {tabs, files, left, dir: DATA_REPO + "/imports/" + tab};
 }
 async function loadData(f) {
   if (!GIT) return (await fetch("/api/file/" + encodeURIComponent(f) + "?tab=" + encodeURIComponent(tab))).json();
@@ -519,7 +522,8 @@ async function loadFiles() {
   if (tab) loadGloss();
   $("files").innerHTML = "";
   for (const f of r.files) {
-    const d = document.createElement("div"); d.textContent = f; d.onclick = () => openFile(f, d);
+    const d = document.createElement("div"); d.textContent = f; d.dataset.f = f; d.onclick = () => openFile(f, d);
+    if (r.left && r.left[f] === 0) d.classList.add("ok");          // переводить нечего — серая
     $("files").appendChild(d);
   }
 }
@@ -574,6 +578,10 @@ async function doUpload() {
   } catch (e) { $("upLog").textContent = "Ошибка: " + e; }
   b.disabled = false;
 }
+function markFile() {                  // открытая глава: серая, если в ней не осталось строк без перевода
+  const el = [...$("files").children].find(x => x.dataset.f === file);
+  if (el && data) el.classList.toggle("ok", !data.lines.some(todo));
+}
 async function openFile(f, el) {
   document.querySelectorAll("#files div").forEach(x => x.classList.remove("on")); el.classList.add("on");
   file = f; data = await loadData(f); render(); pick(view[0] ?? -1);
@@ -602,6 +610,7 @@ function render() {
   }
   const left = data.lines.filter(todo).length, mine = data.lines.filter(l => l.new).length;
   $("st").textContent = `строк ${data.lines.length} · моих ${mine} · без перевода ${left}`;
+  markFile();
 }
 function pick(i) {
   document.querySelectorAll(".row.on").forEach(x => x.classList.remove("on"));
@@ -618,6 +627,7 @@ async function save(next) {
   if (GIT) {                            // копим правки и отправляем в репозиторий через 10 секунд после последней
     (pending[dataPath(file)] ||= {})[data.lines[i].key] = v;
     clearTimeout(flushTimer); flushTimer = setTimeout(flush, 10000);
+    markFile();
     setGit("Не отправлено строк: " + Object.values(pending).reduce((a, p) => a + Object.keys(p).length, 0));
   } else await fetch("/api/save/" + encodeURIComponent(file) + "?tab=" + encodeURIComponent(tab), {method: "POST", body: JSON.stringify({i, new: v})});
   const pos = view.indexOf(i), nxt = view[pos + 1];
