@@ -39,12 +39,12 @@
   <pre id="impLog" style="white-space:pre-wrap;font-size:11px;color:#555;max-height:120px;overflow:auto;margin:4px 0 0"></pre></div></details>
   <div id="gitbox" style="margin:8px 12px 0">
     <div id="tokrow" style="display:none"><input id="tok" type="password" placeholder="токен GitHub (один раз, хранится только в этом браузере)" style="width:100%;padding:4px 6px"><button style="width:100%;margin-top:4px" onclick="setToken()">Войти</button></div>
-    <button id="syncBtn" style="width:100%" onclick="syncNow()">Отправить в GitHub</button>
+    <button id="syncBtn" style="width:100%" onclick="syncNow()">Синхронизировать с GitHub</button>
     <div id="gitst" style="font-size:11px;color:#777;margin-top:3px"></div>
   </div>
-  <details id="xfer" style="margin:8px 12px 0"><summary style="cursor:pointer;font-weight:600">Выгрузка / загрузка</summary>
+  <details id="xfer" open style="margin:8px 12px 0"><summary style="cursor:pointer;font-weight:600">Выгрузка / загрузка</summary>
   <div style="margin-top:6px"><button style="width:100%" onclick="doExport()">Выгрузить вкладку (ZIP)</button>
-  <textarea id="upText" placeholder="Вставь ответ ИИ как есть (даже кривой JSON)" style="height:70px;font-size:12px;margin-top:6px"></textarea>
+  <textarea id="upText" placeholder="Вставь сырой JSON" style="height:70px;font-size:12px;margin-top:6px"></textarea>
   <input type="file" id="upFile" accept=".zip,.json,.txt" style="width:100%;margin-top:4px;font-size:12px">
   <button id="upGo" style="width:100%;margin-top:4px" onclick="doUpload()">Загрузить перевод</button>
   <div style="font-size:11px;color:#777;margin-top:4px">Вставь текст или выбери ZIP / .json / .txt. Строки сами разложатся по главам по ключам, открывать главу не нужно. Заполненные (зелёные) строки не трогаются.</div>
@@ -251,7 +251,7 @@ function parseLoose(text) {             // ответ ИИ как есть: об
 }
 async function doUpload() {
   const f0 = $("upFile").files[0], txt = $("upText").value.trim();
-  if (!f0 && !txt) { $("upLog").textContent = "Вставь ответ ИИ или выбери файл"; return; }
+  if (!f0 && !txt) { $("upLog").textContent = "Вставь сырой JSON или выбери файл"; return; }
   const b = $("upGo"); b.disabled = true; $("upLog").textContent = "Загружаю…";
   try {
     let f = f0, parsed = null;               // текст и не-ZIP файлы разбираем здесь, дальше уходит уже ровный JSON
