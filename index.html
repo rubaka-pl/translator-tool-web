@@ -327,7 +327,7 @@
     <select id="theme" title="тема" onchange="setTheme(this.value)"></select>
   </div>
   <div id="list"></div>
-  <div id="mid"><button id="copyView" onclick="copyView()">Промпт + всё на экране</button> <button id="copy10" onclick="copyN(10)">Промпт + 10 строк</button></div>
+  <div id="mid"><button id="copyView" onclick="copyView()">Промпт + всё на экране</button> <button id="copy10" class="copyN" onclick="copyN(10, this)">Промпт + 10 строк</button> <button class="copyN" onclick="copyN(30, this)">+ 30</button> <button class="copyN" onclick="copyN(50, this)">+ 50</button> <button class="copyN" onclick="copyN(100, this)">+ 100</button></div>
   <div id="ed">
     <div class="src"><b>№ / кто</b><span id="eKey"></span></div>
     <div class="src"><b>Японский</b><span id="eJp"></span> <button onclick="cp('jp')">копировать</button></div>
@@ -629,8 +629,8 @@ async function copyView() {             // строки, которые сейч
   await copyText(promptText(view.filter(i => todo(data.lines[i])).map(i => data.lines[i].key), lines));     // промпт + сами строки
   btn.textContent = `Скопировано строк: ${lines.length}`; setTimeout(() => btn.textContent = label, 2500);
 }
-async function copyN(n) {               // n строк списка, начиная с выбранной (или с первой), в том же формате
-  const btn = $("copy10"), label = `Промпт + ${n} строк`;
+async function copyN(n, el) {               // n строк списка, начиная с выбранной (или с первой), в том же формате
+  const btn = el || $("copy10"), label = (btn.dataset.label ||= btn.textContent);   // исходная подпись, даже если нажали повторно
   if (!data || !view.length) { btn.textContent = "На экране нет строк"; setTimeout(() => btn.textContent = label, 1800); return; }
   const from = Math.max(0, view.indexOf(cur)), part = view.slice(from, from + n);
   const lines = part.map(i => { const l = data.lines[i]; return {key: l.key, spk: l.spk || "", jp: l.jp || "", old: l.old || "", new: l.new || ""}; });
