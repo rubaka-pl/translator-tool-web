@@ -697,7 +697,7 @@ function promptText(idx, att) {        // idx — key строк на перев
       (att ? `\n\nСТРОКИ (глава ${file}):\n${JSON.stringify({file, lines: att}, null, 1)}` : "");
 }
 function cp(f) { if (cur >= 0) navigator.clipboard.writeText(data.lines[cur][f] || ""); }
-// Ctrl+C по выделенным мышью строкам списка: в буфер идёт промпт с глоссарием и эти строки в JSON (в полях ввода копирование обычное)
+// Ctrl+C по выделенным мышью строкам списка: в буфер идёт {"ключ": "японский текст"} без промпта (в полях ввода копирование обычное)
 document.addEventListener("copy", e => {
   if (!data || e.target.closest && e.target.closest("textarea, input")) return;
   const sel = document.getSelection(); if (!sel || sel.isCollapsed) return;
@@ -707,10 +707,10 @@ document.addEventListener("copy", e => {
     return sr.compareBoundaryPoints(Range.START_TO_END, rr) > 0 && sr.compareBoundaryPoints(Range.END_TO_START, rr) < 0;
   });
   if (!idx.length) return;
-  const lines = idx.map(i => { const l = data.lines[i]; return {key: l.key, spk: l.spk || "", jp: l.jp || "", old: l.old || "", new: l.new || ""}; });
-  e.clipboardData.setData("text/plain", promptText(idx.filter(i => todo(data.lines[i])).map(i => data.lines[i].key), lines));
+  const out = {}; for (const i of idx) out[data.lines[i].key] = data.lines[i].jp || "";
+  e.clipboardData.setData("text/plain", JSON.stringify(out, null, 1));
   e.preventDefault();
-  if (typeof toast === "function") toast(`промпт + ${lines.length} строк`);
+  if (typeof toast === "function") toast(`ключи + текст: ${idx.length} строк`);
 });
 $("eNew").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); save(true); } });
 $("onlyTodo").onchange = () => { render(); pick(view[0] ?? -1); };
