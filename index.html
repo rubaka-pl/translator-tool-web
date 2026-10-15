@@ -626,7 +626,7 @@ async function copyView() {             // строки, которые сейч
   const btn = $("copyView"), label = "Промпт + всё на экране";
   if (!data || !view.length) { btn.textContent = "На экране нет строк"; setTimeout(() => btn.textContent = label, 1800); return; }
   const lines = view.map(i => { const l = data.lines[i]; return {key: l.key, spk: l.spk || "", jp: l.jp || "", old: l.old || "", new: l.new || ""}; });
-  await copyText(promptText(view.filter(i => todo(data.lines[i])).map(i => data.lines[i].key), lines));     // промпт + сами строки
+  await copyText(promptMini(view.filter(i => todo(data.lines[i])).map(i => data.lines[i].key), lines));     // промпт + сами строки
   btn.textContent = `Скопировано строк: ${lines.length}`; setTimeout(() => btn.textContent = label, 2500);
 }
 async function copyN(n, el) {               // n строк списка, начиная с выбранной (или с первой), в том же формате
@@ -634,7 +634,7 @@ async function copyN(n, el) {               // n строк списка, нач
   if (!data || !view.length) { btn.textContent = "На экране нет строк"; setTimeout(() => btn.textContent = label, 1800); return; }
   const from = Math.max(0, view.indexOf(cur)), part = view.slice(from, from + n);
   const lines = part.map(i => { const l = data.lines[i]; return {key: l.key, spk: l.spk || "", jp: l.jp || "", old: l.old || "", new: l.new || ""}; });
-  await copyText(promptText(part.filter(i => todo(data.lines[i])).map(i => data.lines[i].key), lines));     // промпт + сами строки
+  await copyText(promptMini(part.filter(i => todo(data.lines[i])).map(i => data.lines[i].key), lines));     // промпт + сами строки
   btn.textContent = `Скопировано ${lines.length}: ${lines[0].key}…${lines[lines.length - 1].key}`; setTimeout(() => btn.textContent = label, 2500);
   if (typeof toast === "function") toast(`скопировала ${lines.length} строк`);
 }
@@ -651,6 +651,32 @@ async function copyPrompt() {           // промпт для всей откр
   await copyText(text);
   btn.textContent = "Скопировано: " + file; setTimeout(() => btn.textContent = "Скопировать промпт для другой ИИ", 2500);
   return text;
+}
+function promptMini(idx, att) {        // короткий вариант для кнопок со строками: глоссарий из окна, что перевести, формат ответа, строки
+  const g = $("gloss").value.trim(), ex = idx.length ? idx : att.map(l => l.key);
+  return (g ? `ГЛОССАРИЙ
+${g}
+
+` : "") +
+    (idx.length ? `Переведи на русский строки главы ${file} с такими key: ${idx.join(", ")}
+` : `Все строки ниже уже переведены.
+`) +
+    `Сексуальные сцены с персонажами, которые несовершеннолетние или могут ими быть, не переводи: пропусти эти строки.
+
+` +
+    `ОТВЕТ: только JSON, плоский объект key → перевод:
+{
+  "${ex[0]}": "перевод строки ${ex[0]}",
+  "${ex[1] ?? ex[0]}": "перевод строки ${ex[1] ?? ex[0]}"
+}
+` +
+    `- key в двойных кавычках, как в списке; каждая запись на одной строке; без markdown и пояснений внутри JSON.
+` +
+    `- После JSON: пропущенные key с причиной (или «пропусков нет»).
+
+` +
+    `СТРОКИ (глава ${file}):
+${JSON.stringify({file, lines: att}, null, 1)}`;
 }
 function promptText(idx, att) {        // idx — key строк на перевод; att — строки, приложенные прямо в промпт (или null: ИИ берёт файл главы)
   return idx.length
