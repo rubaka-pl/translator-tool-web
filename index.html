@@ -48,7 +48,7 @@
   <button id="upGo" style="width:100%;margin-top:4px" onclick="doUpload()">Загрузить перевод</button>
   <div style="font-size:11px;color:#777;margin-top:4px">ZIP или .json из выгрузки; также можно {"ключ": "перевод"} — он пойдёт в открытый файл. Заполненные (зелёные) строки не трогаются.</div>
   <pre id="upLog" style="white-space:pre-wrap;font-size:11px;color:#555;max-height:140px;overflow:auto;margin:4px 0 0"></pre></div></details>
-  <h1>Файлы</h1><div id="files"></div><div id="dir" style="padding:8px 12px;color:#999;font-size:11px"></div></div>
+  <h1>Файлы</h1><div id="files"></div><div style="padding:8px 12px;border-top:1px solid #eee"><button id="promptBtn" style="width:100%" onclick="copyPrompt()">Скопировать промпт для другой ИИ</button></div><div id="dir"style="padding:8px 12px;color:#999;font-size:11px"></div></div>
 <div id="main">
   <div id="top">
     <label><input type="checkbox" id="onlyTodo" checked> только без перевода</label>
@@ -276,6 +276,24 @@ async function save(next) {
   render(); if (next) pick(nxt ?? (view[0] ?? -1)); else pick(i);
 }
 function move(d) { const p = view.indexOf(cur); const n = view[p + d]; if (n !== undefined) pick(n); }
+function ranges(nums) {                 // [1,2,3,4,8,9] -> "1-4, 8-9"
+  const out = []; let a = null, b = null;
+  for (const n of nums) { if (a === null) a = b = n; else if (n === b + 1) b = n; else { out.push(a === b ? "" + a : a + "-" + b); a = b = n; } }
+  if (a !== null) out.push(a === b ? "" + a : a + "-" + b);
+  return out.join(", ");
+}
+async function copyPrompt() {           // короткий промпт для открытой главы: номера строк без перевода
+  const btn = $("promptBtn");
+  if (!data || !file) { btn.textContent = "Сначала открой главу"; setTimeout(() => btn.textContent = "Скопировать промпт для другой ИИ", 1800); return; }
+  const idx = []; data.lines.forEach((l, i) => { if (todo(l)) idx.push(i + 1); });
+  const text = idx.length
+    ? `Глава: ${file}\nНе переведены строки: ${ranges(idx)}\n(номер = порядок в lines, считая с 1)\n\nПереведи их на русский, остальные не трогай.\nОтвет: JSON {"key": "перевод"} только для этих строк, key из файла.`
+    : `Глава: ${file}\nВсё переведено.`;
+  try { await navigator.clipboard.writeText(text); }
+  catch (e) { const t = document.createElement("textarea"); t.value = text; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); }
+  btn.textContent = "Скопировано: " + file; setTimeout(() => btn.textContent = "Скопировать промпт для другой ИИ", 2500);
+  return text;
+}
 function cp(f) { if (cur >= 0) navigator.clipboard.writeText(data.lines[cur][f] || ""); }
 $("eNew").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); save(true); } });
 $("onlyTodo").onchange = () => { render(); pick(view[0] ?? -1); };
