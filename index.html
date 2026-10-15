@@ -637,18 +637,21 @@ async function save(next) {
 }
 function move(d) { const p = view.indexOf(cur); const n = view[p + d]; if (n !== undefined) pick(n); }
 const SITE = "https://rubaka-pl.github.io/translator-tool-web/";
+function fixOld(t) {                   // правила вкладки (old_fix в главе): имена из чужого перевода -> наши
+  for (const [p, r] of (data && data.old_fix) || []) { try { t = t.replace(new RegExp(p, "g"), r); } catch (e) {} }
+  return t;
+}
 function oldToNew() {                  // старый перевод в поле «Мой перевод» (не сохраняет: поправь и Enter)
   if (cur < 0 || !data) return;
-  const e = $("eNew"); e.value = data.lines[cur].old || ""; e.focus(); e.setSelectionRange(e.value.length, e.value.length);
+  const e = $("eNew"); e.value = fixOld(data.lines[cur].old || ""); e.focus(); e.setSelectionRange(e.value.length, e.value.length);
 }
 async function oldToNewAll() {         // во все строки главы без перевода — старый перевод (заполненные и пропущенные нарочно не трогаются)
   const btn = $("oldAll"), label = "Старый → мой (вся глава)";
   const idx = data ? data.lines.map((l, i) => i).filter(i => todo(data.lines[i]) && (data.lines[i].old || "").trim() && !JP.test(data.lines[i].old)) : [];
   if (!idx.length) { btn.textContent = data ? "Нечего подставлять" : "Сначала открой главу"; setTimeout(() => btn.textContent = label, 1800); return; }
-  if (!confirm(`Подставить старый перевод в ${idx.length} пустых строк главы ${file}?
-Имена в старом переводе бывают другие (например, «Алиса» вместо «Арису») — их потом поправь.`)) return;
+  if (!confirm(`Подставить старый перевод в ${idx.length} пустых строк главы ${file}?` + (data.old_fix ? "\nИмена из старого перевода заменятся на наши (Алиса → Арису и т. п.)." : "\nИмена в старом переводе бывают другие — проверь их потом."))) return;
   const upd = {};
-  for (const i of idx) { const l = data.lines[i]; l.new = l.old.trim(); upd[l.key] = l.new; }
+  for (const i of idx) { const l = data.lines[i]; l.new = fixOld(l.old.trim()); upd[l.key] = l.new; }
   if (GIT) {
     Object.assign(pending[dataPath(file)] ||= {}, upd);
     await flush();
