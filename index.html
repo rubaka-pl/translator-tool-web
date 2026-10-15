@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Шайтан-переводчик</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;800&family=M+PLUS+Rounded+1c:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;800&family=M+PLUS+Rounded+1c:wght@400;700&family=Ruslan+Display&family=Old+Standard+TT:wght@400;700&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg1:#fff0f7; --bg2:#f1ebff; --panel:#ffffffd9; --line:#f3d6e6; --ink:#4a3557; --mute:#9a86a8;
@@ -43,6 +43,10 @@
   .row.todo { background:var(--todo); } .row.done { background:var(--done); }
   .row.done .k::after { content:" ✓"; color:var(--doneInk); font-weight:800; }
   .row.on { outline:2px solid var(--acc); outline-offset:-2px; box-shadow:0 0 0 4px #ff6fae33; }
+  .row.head { position:sticky; top:-6px; z-index:2; cursor:default; margin-top:0; font-size:12px; font-weight:800; color:#fff; text-transform:uppercase; letter-spacing:.4px;
+    background:linear-gradient(90deg, var(--acc), var(--acc2)); box-shadow:0 3px 10px #ff6fae33; }
+  .row.head:hover { transform:none; }
+  #jsonHint { font:11px/1.4 Consolas, monospace; background:var(--on); border-radius:10px; padding:6px 8px; margin:4px 0 0; white-space:pre; overflow:auto; color:var(--ink); }
   .k { color:var(--mute); font-weight:700; } .s { color:var(--acc2); font-weight:700; }
   #mid { text-align:center; padding:6px; }
   #ed { padding:12px 14px; }
@@ -65,8 +69,8 @@
   summary::-webkit-details-marker { display:none; }
   summary::before { content:"✦ "; color:var(--acc); }
   details[open] summary::before { content:"✧ "; }
-  #imp summary::after { content:" 🔮"; } #xfer summary::after { content:" 📦"; }
-  #syncBtn::before { content:"☁️ "; } #upGo::before { content:"📥 "; } #promptBtn::before { content:"✨ "; } #copyView::before { content:"📋 "; }
+  #imp summary::after { content:" 🔮"; } #glo summary::after { content:" 📖"; } #glossSave::before { content:"💾 "; } #glossDl::before { content:"⬇️ "; } #xfer summary::after { content:" 📦"; }
+  #syncBtn::before { content:"☁️ "; } #upGo::before { content:"📥 "; } #promptBtn::before { content:"✨ "; } #copyView::before { content:"📋 "; } #copy10::before { content:"🔟 "; }
   button[onclick^="save"]::before { content:"💾 "; } button[onclick="doExport()"]::before { content:"📤 "; } #impGo::before { content:"🕯️ "; }
   #st { color:var(--mute); font-size:13px; font-weight:700; }
   pre { color:var(--mute) !important; }
@@ -79,6 +83,70 @@
   @keyframes spark { to { transform:translate(var(--dx), var(--dy)) scale(.4) rotate(160deg); opacity:0; } }
   @media (prefers-reduced-motion: reduce) { *, *::before { animation:none !important; transition:none !important; } }
   @media (max-width: 760px) { body { flex-direction:column; height:auto; } #side { width:auto; margin:10px 10px 0; } .row { grid-template-columns:56px 1fr; } .row span:nth-child(n+4) { grid-column:1 / -1; } }
+
+  /* ---- тема DSBM: чёрно-серая, зерно, виньетка, готика ---- */
+  :root[data-theme="dsbm"] {
+    --bg1:#070707; --bg2:#121212; --panel:#111111e8; --line:#2a2a2a; --ink:#c9c6c1; --mute:#6d6a66;
+    --acc:#8c8780; --acc2:#3b3a38; --done:#151815; --doneInk:#7d8a7d; --todo:#17150f; --on:#1f1e1c; --shadow:0 0 0 1px #222, 0 10px 40px #000c;
+  }
+  :root[data-theme="dsbm"] body { font-family:"Old Standard TT", "M PLUS Rounded 1c", Georgia, serif; letter-spacing:.2px;
+    background: radial-gradient(ellipse at center, #1a1a1a 0%, #0b0b0b 55%, #000 100%); }
+  :root[data-theme="dsbm"] body::after { content:""; position:fixed; inset:0; pointer-events:none; z-index:20; opacity:.11; mix-blend-mode:screen;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+  :root[data-theme="dsbm"] body::before { content:""; position:fixed; inset:0; pointer-events:none; z-index:19; box-shadow:inset 0 0 180px 60px #000; }
+  :root[data-theme="dsbm"] #side, :root[data-theme="dsbm"] #top, :root[data-theme="dsbm"] #ed, :root[data-theme="dsbm"] #mid, :root[data-theme="dsbm"] #list { border-radius:2px; backdrop-filter:none; }
+  :root[data-theme="dsbm"] #logo { font-family:"Ruslan Display", serif; font-weight:400; font-size:21px; color:#d8d4cc; text-shadow:0 0 12px #000, 0 0 2px #fff3; }
+  :root[data-theme="dsbm"] #logo .kao { font-size:0; animation:none; }
+  :root[data-theme="dsbm"] #logo .kao::before { content:"†"; font-size:22px; color:#8c8780; margin-right:4px; }
+  :root[data-theme="dsbm"] #logo small { font-family:"Old Standard TT", serif; font-style:italic; font-size:0; }
+  :root[data-theme="dsbm"] #logo small::before { content:"переводим в тишине"; font-size:12px; }
+  :root[data-theme="dsbm"] #side h1, :root[data-theme="dsbm"] summary { font-family:"Ruslan Display", serif; font-weight:400; letter-spacing:1px; }
+  :root[data-theme="dsbm"] #side h1::before, :root[data-theme="dsbm"] summary::before { content:"✝ "; color:var(--mute); }
+  :root[data-theme="dsbm"] summary::after { content:"" !important; }
+  :root[data-theme="dsbm"] #files div { border-radius:0; border-bottom:1px solid #1c1c1c; }
+  :root[data-theme="dsbm"] #files div::before { content:"· "; color:var(--mute); }
+  :root[data-theme="dsbm"] #files div.on, :root[data-theme="dsbm"] #tabs button[style*="700"] { background:#262523; color:#eee; border-left:2px solid #8c8780; }
+  :root[data-theme="dsbm"] #files div.on::before { content:"† "; color:#aaa; }
+  :root[data-theme="dsbm"] button { background:#161616; color:#bdb9b2; border:1px solid #3a3a3a; border-radius:0; box-shadow:none; font-family:"Old Standard TT", serif; text-transform:lowercase; letter-spacing:1px; }
+  :root[data-theme="dsbm"] button:hover { background:#202020; color:#fff; filter:none; transform:none; }
+  :root[data-theme="dsbm"] button::before { content:"" !important; }
+  :root[data-theme="dsbm"] textarea, :root[data-theme="dsbm"] input:not([type=checkbox]):not([type=file]) { border-radius:0; border-color:#2e2e2e; background:#0c0c0c; font-family:"Old Standard TT", serif; }
+  :root[data-theme="dsbm"] textarea:focus, :root[data-theme="dsbm"] input:focus { border-color:#777; box-shadow:0 0 12px #ffffff10; }
+  :root[data-theme="dsbm"] .row { border-radius:0; margin:0; border-bottom:1px solid #1b1b1b; }
+  :root[data-theme="dsbm"] .row:hover { box-shadow:none; background:#1c1c1c; }
+  :root[data-theme="dsbm"] .row.on { outline:1px solid #8c8780; box-shadow:none; }
+  :root[data-theme="dsbm"] .row.done .k::after { content:" †"; color:#7d8a7d; }
+  :root[data-theme="dsbm"] .row.head { background:#0a0a0a; color:#8c8780; font-family:"Ruslan Display", serif; font-weight:400; text-transform:none; letter-spacing:1.5px; box-shadow:0 1px 0 #333; }
+  :root[data-theme="dsbm"] #bar { border-radius:0; background:#1a1a1a; }
+  :root[data-theme="dsbm"] #bar i { border-radius:0; background:linear-gradient(90deg, #3b3a38, #8c8780); animation:none; }
+  :root[data-theme="dsbm"] #toast { background:#0e0e0e; color:#cfcac2; border:1px solid #333; border-radius:0; box-shadow:0 0 40px #000; font-family:"Old Standard TT", serif; font-style:italic; font-weight:400; }
+  :root[data-theme="dsbm"] #jsonHint { border-radius:0; background:#0c0c0c; }
+  :root[data-theme="dsbm"] .spark { color:#888 !important; animation:ash 1.6s ease-in forwards; }
+  @keyframes ash { to { transform:translate(var(--dx), 90px) rotate(40deg); opacity:0; } }
+
+  /* ---- альт-примесь к DSBM: неоново-розовые акценты, фишнет, сердечки рядом с крестами ---- */
+  :root[data-theme="dsbm"] { --pink:#ff3e9a; }
+  :root[data-theme="dsbm"] body { background:
+      repeating-linear-gradient(45deg, #ffffff06 0 1px, transparent 1px 14px),
+      repeating-linear-gradient(-45deg, #ffffff06 0 1px, transparent 1px 14px),
+      radial-gradient(ellipse at center, #1a1a1a 0%, #0b0b0b 55%, #000 100%); }
+  :root[data-theme="dsbm"] #logo .kao::before { content:"†♡"; color:var(--pink); text-shadow:0 0 10px #ff3e9a99; }
+  :root[data-theme="dsbm"] #logo small::before { content:"переводим в тишине ♡"; }
+  :root[data-theme="dsbm"] #logo { border-bottom:1px dashed #ff3e9a55; padding-bottom:10px; }
+  :root[data-theme="dsbm"] #files div.on, :root[data-theme="dsbm"] #tabs button[style*="700"] { border-left:2px solid var(--pink); box-shadow:inset 6px 0 14px -8px #ff3e9a88; }
+  :root[data-theme="dsbm"] #files div.on::before { content:"♡ "; color:var(--pink); }
+  :root[data-theme="dsbm"] #files div:hover::before { content:"† "; color:var(--pink); }
+  :root[data-theme="dsbm"] button { border-color:#ff3e9a55; }
+  :root[data-theme="dsbm"] button:hover { border-color:var(--pink); box-shadow:0 0 12px #ff3e9a55; color:#ffd6ea; }
+  :root[data-theme="dsbm"] .row.on { outline-color:var(--pink); box-shadow:0 0 14px #ff3e9a33; }
+  :root[data-theme="dsbm"] .row.done .k::after { content:" †♡"; color:var(--pink); }
+  :root[data-theme="dsbm"] .row.head { color:#ff8cc4; border-bottom:1px solid #ff3e9a66; }
+  :root[data-theme="dsbm"] #bar i { background:linear-gradient(90deg, #2a0f1d, var(--pink)); box-shadow:0 0 10px #ff3e9a88; }
+  :root[data-theme="dsbm"] #toast { border-color:var(--pink); box-shadow:0 0 30px #ff3e9a44; }
+  :root[data-theme="dsbm"] textarea:focus, :root[data-theme="dsbm"] input:focus { border-color:var(--pink); box-shadow:0 0 12px #ff3e9a33; }
+  :root[data-theme="dsbm"] #side h1::before, :root[data-theme="dsbm"] summary::before { color:var(--pink); }
+  :root[data-theme="dsbm"] #mid, :root[data-theme="dsbm"] #top { border-top:1px dashed #ff3e9a33; }
+  :root[data-theme="dsbm"] .spark:nth-child(odd) { color:var(--pink) !important; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
@@ -94,8 +162,17 @@
     <button id="syncBtn" style="width:100%" onclick="syncNow()">Синхронизировать с GitHub</button>
     <div id="gitst" style="font-size:11px;color:#777;margin-top:3px"></div>
   </div>
+  <details id="glo" style="margin:8px 12px 0"><summary>Глоссарий вкладки</summary>
+  <div style="margin-top:6px"><textarea id="gloss" placeholder="Имена и термины этой игры, по строке: оригинал — перевод (примечание). Попадает в промпт." style="height:120px;font-size:12px"></textarea>
+  <div style="display:flex;gap:6px;margin-top:4px"><button id="glossSave" style="flex:1" onclick="saveGloss()">Сохранить</button><button id="glossDl" style="flex:1" onclick="downloadGloss()">Скачать</button></div>
+  <div id="glossSt" style="font-size:11px;color:var(--mute);margin-top:3px"></div></div></details>
   <details id="xfer" open style="margin:8px 12px 0"><summary style="cursor:pointer;font-weight:600">Выгрузка / загрузка</summary>
   <div style="margin-top:6px"><button style="width:100%" onclick="doExport()">Выгрузить вкладку (ZIP)</button>
+  <div style="font-size:11px;color:var(--mute);margin-top:6px">Нужен JSON такого вида: ключ строки → перевод</div>
+  <div id="jsonHint">{
+  "5400": "перевод строки 5400",
+  "5428": "перевод строки 5428"
+}</div>
   <textarea id="upText" placeholder="Вставь сырой JSON" style="height:70px;font-size:12px;margin-top:6px"></textarea>
   <input type="file" id="upFile" accept=".zip,.json,.txt" style="width:100%;margin-top:4px;font-size:12px">
   <button id="upGo" style="width:100%;margin-top:4px" onclick="doUpload()">Загрузить перевод</button>
@@ -111,7 +188,7 @@
     <button id="theme" title="тема" onclick="toggleTheme()" style="padding:4px 10px">🌙</button>
   </div>
   <div id="list"></div>
-  <div id="mid"><button id="copyView" onclick="copyView()">Скопировать всё, что на экране (с ключами)</button></div>
+  <div id="mid"><button id="copyView" onclick="copyView()">Скопировать всё, что на экране (с ключами)</button> <button id="copy10" onclick="copyN(10)">Скопировать 10 строк</button></div>
   <div id="ed">
     <div class="src"><b>№ / кто</b><span id="eKey"></span></div>
     <div class="src"><b>Японский</b><span id="eJp"></span> <button onclick="cp('jp')">копировать</button></div>
@@ -260,6 +337,29 @@ async function doExport() {
   const a = document.createElement("a"); a.href = URL.createObjectURL(await z.generateAsync({type: "blob"})); a.download = tab + ".zip"; a.click();
 }
 
+// ---- глоссарий вкладки: glossary/<вкладка>.json, в репозитории; уходит в промпт ----
+const glossPath = () => `glossary/${tab}.json`;
+async function loadGloss() {
+  let text = "";
+  try {
+    if (GIT) { const r = await ghApi(glossPath()); if (r.ok) text = JSON.parse(b64text((await r.json()).content)).text || ""; }
+    else text = (await (await fetch("/api/glossary?tab=" + encodeURIComponent(tab))).json()).text || "";
+  } catch (e) {}
+  $("gloss").value = text; $("glossSt").textContent = text ? `строк в глоссарии: ${text.split("\n").filter(x => x.trim()).length}` : "пока пусто";
+}
+async function saveGloss() {
+  const text = $("gloss").value;
+  try {
+    if (GIT) { const r = await ghApi(glossPath()); const sha = r.ok ? (await r.json()).sha : null; const w = await ghWrite(glossPath(), {text}, sha, "Глоссарий: " + tab); if (!w.ok) throw new Error("GitHub ответил " + w.status); }
+    else await fetch("/api/glossary?tab=" + encodeURIComponent(tab), {method: "POST", body: JSON.stringify({text})});
+    $("glossSt").textContent = "сохранено"; if (typeof toast === "function") toast("глоссарий сохранён");
+  } catch (e) { $("glossSt").textContent = "Ошибка: " + e.message; }
+}
+function downloadGloss() {
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([$("gloss").value], {type: "text/plain;charset=utf-8"}));
+  a.download = `glossary_${tab}.txt`; a.click();
+}
+
 async function loadFiles() {
   const r = GIT ? await gitFiles() : await (await fetch("/api/files?tab=" + encodeURIComponent(tab))).json();
   if (!tab) tab = r.tabs[0];
@@ -270,6 +370,7 @@ async function loadFiles() {
     $("tabs").appendChild(b);
   }
   $("dir").textContent = r.dir;
+  if (tab) loadGloss();
   $("files").innerHTML = "";
   for (const f of r.files) {
     const d = document.createElement("div"); d.textContent = f; d.onclick = () => openFile(f, d);
@@ -340,6 +441,11 @@ function render() {
     return !q || [l.key, l.spk, l.jp, l.old, l.new].join(" ").toLowerCase().includes(q);
   });
   const box = $("list"); box.innerHTML = "";
+  const head = document.createElement("div"); head.className = "row head";            // подписи колонок
+  for (const t of ["Ключ", "Кто", "Японский", "Старый перевод", "Мой перевод"]) { const s = document.createElement("span"); s.textContent = t; head.appendChild(s); }
+  box.appendChild(head);
+  const ex = data.lines.filter(todo).slice(0, 2).map(l => l.key);                      // пример JSON с ключами этой главы
+  if (ex.length) $("jsonHint").textContent = "{\n" + ex.map(k => `  "${k}": "перевод строки ${k}"`).join(",\n") + "\n}";
   for (const i of view) {
     const l = data.lines[i], d = document.createElement("div");
     d.className = "row " + (l.new ? "done" : todo(l) ? "todo" : ""); d.id = "r" + i;
@@ -384,6 +490,15 @@ async function copyView() {             // строки, которые сейч
   await copyText(JSON.stringify({file, lines}, null, 1));
   btn.textContent = `Скопировано строк: ${lines.length}`; setTimeout(() => btn.textContent = label, 2500);
 }
+async function copyN(n) {               // n строк списка, начиная с выбранной (или с первой), в том же формате
+  const btn = $("copy10"), label = `Скопировать ${n} строк`;
+  if (!data || !view.length) { btn.textContent = "На экране нет строк"; setTimeout(() => btn.textContent = label, 1800); return; }
+  const from = Math.max(0, view.indexOf(cur)), part = view.slice(from, from + n);
+  const lines = part.map(i => { const l = data.lines[i]; return {key: l.key, spk: l.spk || "", jp: l.jp || "", old: l.old || "", new: l.new || ""}; });
+  await copyText(JSON.stringify({file, lines}, null, 1));
+  btn.textContent = `Скопировано ${lines.length}: ${lines[0].key}…${lines[lines.length - 1].key}`; setTimeout(() => btn.textContent = label, 2500);
+  if (typeof toast === "function") toast(`скопировала ${lines.length} строк`);
+}
 function ranges(nums) {                 // [1,2,3,4,8,9] -> "1-4, 8-9"
   const out = []; let a = null, b = null;
   for (const n of nums) { if (a === null) a = b = n; else if (n === b + 1) b = n; else { out.push(a === b ? "" + a : a + "-" + b); a = b = n; } }
@@ -405,6 +520,7 @@ async function copyPrompt() {           // короткий промпт для 
       `ЗАДАЧА\n` +
       `Переведи на русский строки главы ${file} с такими key (всего ${idx.length}):\n${idx.join(", ")}\n` +
       `Это значения поля key в файле, а не порядковые номера. Ответ верни ровно с этими key: по ним перевод подставляется в строки. Остальные строки не трогай, они уже переведены.\n\n` +
+      ($("gloss").value.trim() ? `ГЛОССАРИЙ (имена и термины этой игры, пиши строго так)\n${$("gloss").value.trim()}\n\n` : "") +
       `КАК ПЕРЕВОДИТЬ\n` +
       `- Переводим по смыслу и так, как это задумал автор: передавай интонацию, юмор, сухость или грубость оригинала, а не дословный текст. Звучать должно как написанное по-русски с нуля.\n` +
       `- Ничего не добавляй от себя и ничего не выпускай. Не «улучшай» текст, не поднимай регистр, не смягчай и не усиливай эмоции.\n` +
@@ -429,7 +545,7 @@ async function copyPrompt() {           // короткий промпт для 
       `- Каждая запись целиком на одной строке, без переносов внутри текста; запятая между записями, после последней запятой нет.\n` +
       `- Кавычки " внутри перевода не используй (для реплик есть «…»).\n` +
       `- Не возвращай формат файла {"file", "lines": [...]} и не повторяй поля jp, spk, old: только key и перевод.\n` +
-      `- Кодировка UTF-8, без кода, без пояснений внутри JSON и без markdown. После JSON отдельным абзацем: список пропущенных key с причиной (или «пропусков нет»). Я вставлю JSON на сайте в поле «Вставь сырой JSON».\n` +
+      `- Кодировка UTF-8, без кода, без пояснений внутри JSON и без markdown. После JSON отдельным абзацем: список пропущенных key с причиной (или «пропусков нет»). Потом блок «НОВОЕ В ГЛОССАРИЙ»: имена, прозвища и термины, которых нет в глоссарии выше, по строке «оригинал — перевод (примечание)», или «нового нет». Я вставлю JSON на сайте в поле «Вставь сырой JSON».\n` +
       `Если можешь отдавать файлы: назови файл ответа ${file}.json. Если глав несколько, можно одним общим JSON {"key": "перевод"} со всеми строками: сайт сам разложит их по главам по key. Или для каждой главы отдельный JSON с её именем (например, 003_scene_02.json и 004_scene_03.json) в одном ZIP.`
     : `Глава: ${file}\nВсё переведено.`;
   try { await navigator.clipboard.writeText(text); }
@@ -448,15 +564,17 @@ loadFiles().catch(e => setGit("Ошибка: " + e.message));
 <script>
 // ---- кавай-слой: тосты, искорки, полоска прогресса, тема. Логику не трогает, только оборачивает ----
 const KAO = ["(｡•ᴗ•｡)♡", "(ﾉ◕ヮ◕)ﾉ*:･ﾟ✧", "ʕ•ᴥ•ʔ", "(=^･ω･^=)", "(*≧▽≦)", "✧(｡•̀ᴗ-)✧", "(っ˘ω˘ς )"];
+const KAO_DSBM = ["†", "∴", "…", "✝", "†♡", "♡"];
+const isDsbm = () => document.documentElement.dataset.theme === "dsbm";
 let toastT = null;
 function toast(msg) {
-  const t = $("toast"); t.textContent = msg + "  " + KAO[Math.floor(Math.random() * KAO.length)];
+  const t = $("toast"); const k = isDsbm() ? KAO_DSBM : KAO; t.textContent = (isDsbm() ? msg.replace(/~/g, ".") : msg) + "  " + k[Math.floor(Math.random() * k.length)];
   t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 1800);
 }
 function sparkle(x, y) {
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   for (let i = 0; i < 8; i++) {
-    const s = document.createElement("span"); s.className = "spark"; s.textContent = ["✦", "♡", "✧", "⋆", "❀"][i % 5];
+    const s = document.createElement("span"); s.className = "spark"; s.textContent = isDsbm() ? ["·", "♡", "†", "˙", "♡"][i % 5] : ["✦", "♡", "✧", "⋆", "❀"][i % 5];
     s.style.left = x + "px"; s.style.top = y + "px"; s.style.color = i % 2 ? "var(--acc)" : "var(--acc2)";
     const a = Math.PI * 2 * i / 8; s.style.setProperty("--dx", Math.cos(a) * 46 + "px"); s.style.setProperty("--dy", Math.sin(a) * 46 - 20 + "px");
     document.body.appendChild(s); setTimeout(() => s.remove(), 850);
@@ -477,12 +595,14 @@ const _save = save; save = async next => {
 const _copyPrompt = copyPrompt; copyPrompt = async () => { const t = await _copyPrompt(); if (t) toast("промпт в буфере"); return t; };
 const _copyView = copyView; copyView = async () => { await _copyView(); if (data && view.length) toast(`скопировала ${view.length} строк`); };
 const _doUpload = doUpload; doUpload = async () => { await _doUpload(); const m = $("upLog").textContent.match(/записано (\d+)/); if (m) toast(`записано ${m[1]} строк`); };
-function toggleTheme() {
-  const r = document.documentElement, dark = r.dataset.theme ? r.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
-  r.dataset.theme = dark ? "light" : "dark"; $("theme").textContent = dark ? "🌙" : "☀️";
-  try { localStorage.theme = r.dataset.theme; } catch (e) {}
+const THEMES = ["light", "dark", "dsbm"], THEME_ICON = {light: "☀️", dark: "🌙", dsbm: "†♡"};
+function curTheme() { const t = document.documentElement.dataset.theme; return t || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"); }
+function setTheme(t) {
+  document.documentElement.dataset.theme = t; $("theme").textContent = THEME_ICON[t]; $("theme").title = "тема: " + t + " (нажми, чтобы сменить)";
+  try { localStorage.theme = t; } catch (e) {}
 }
-try { if (localStorage.theme) { document.documentElement.dataset.theme = localStorage.theme; $("theme").textContent = localStorage.theme === "dark" ? "☀️" : "🌙"; } } catch (e) {}
+function toggleTheme() { setTheme(THEMES[(THEMES.indexOf(curTheme()) + 1) % THEMES.length]); }
+try { setTheme(localStorage.theme && THEMES.includes(localStorage.theme) ? localStorage.theme : curTheme()); } catch (e) { setTheme(curTheme()); }
 </script>
 </body>
 </html>
