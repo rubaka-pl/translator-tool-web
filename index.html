@@ -93,7 +93,6 @@
     background: radial-gradient(ellipse at center, #1a1a1a 0%, #0b0b0b 55%, #000 100%); }
   :root[data-theme="dsbm"] body::after { content:""; position:fixed; inset:0; pointer-events:none; z-index:20; opacity:.11; mix-blend-mode:screen;
     background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
-  :root[data-theme="dsbm"] body::before { content:""; position:fixed; inset:0; pointer-events:none; z-index:19; box-shadow:inset 0 0 180px 60px #000; }
   :root[data-theme="dsbm"] #side, :root[data-theme="dsbm"] #top, :root[data-theme="dsbm"] #ed, :root[data-theme="dsbm"] #mid, :root[data-theme="dsbm"] #list { border-radius:2px; backdrop-filter:none; }
   :root[data-theme="dsbm"] #logo { font-family:"Ruslan Display", serif; font-weight:400; font-size:21px; color:#d8d4cc; text-shadow:0 0 12px #000, 0 0 2px #fff3; }
   :root[data-theme="dsbm"] #logo .kao { font-size:0; animation:none; }
@@ -212,6 +211,81 @@
   /* ---- свои иконки и в тёмной кавай-теме ---- */
 :root[data-theme="dark"] #syncBtn::before { content:"🌌 "; } :root[data-theme="dark"] #upGo::before { content:"🌙 "; } :root[data-theme="dark"] #promptBtn::before { content:"🔮 "; } :root[data-theme="dark"] #copyView::before { content:"⭐ "; } :root[data-theme="dark"] #copy10::before { content:"✨ "; } :root[data-theme="dark"] button[onclick^="save"]::before { content:"🦇 "; } :root[data-theme="dark"] button[onclick="doExport()"]::before { content:"🪐 "; }
 :root[data-theme="dark"] #files div::before { content:"☾ "; } :root[data-theme="dark"] #files div.on::before { content:"★ "; }
+
+  /* ---- 🧔 Скуф: исходный вид, как в самом начале, без украшений ---- */
+  :root[data-theme="skuf"] { --bg1:#f6f6f4; --bg2:#f6f6f4; --panel:#fff; --line:#ddd; --ink:#222; --mute:#777; --acc:#2a5db0; --acc2:#2a5db0; --done:#e8f3e8; --doneInk:#2a7a2a; --todo:#fff6e0; --on:#e6eefb; --shadow:none; }
+  :root[data-theme="skuf"] body { font:15px/1.45 "Segoe UI", system-ui, sans-serif; background:#f6f6f4; letter-spacing:0; text-shadow:none; }
+  :root[data-theme="skuf"] body::before, :root[data-theme="skuf"] body::after { display:none; }
+  :root[data-theme="skuf"] #side { width:300px; margin:0; border-radius:0; border-right:1px solid #ddd; box-shadow:none; backdrop-filter:none; }
+  :root[data-theme="skuf"] #main { margin:0; gap:0; }
+  :root[data-theme="skuf"] #top, :root[data-theme="skuf"] #ed, :root[data-theme="skuf"] #mid, :root[data-theme="skuf"] #list { border-radius:0; box-shadow:none; backdrop-filter:none; border-bottom:1px solid #ddd; padding-left:12px; padding-right:12px; }
+  :root[data-theme="skuf"] #list { padding:0; }
+  :root[data-theme="skuf"] #logo { display:none; }
+  :root[data-theme="skuf"] #side h1 { font-size:15px; margin:12px; }
+  :root[data-theme="skuf"] #side h1::before, :root[data-theme="skuf"] summary::before, :root[data-theme="skuf"] summary::after,
+  :root[data-theme="skuf"] #files div::before, :root[data-theme="skuf"] button::before, :root[data-theme="skuf"] .row.done .k::after { content:"" !important; }
+  :root[data-theme="skuf"] summary { list-style:revert; font-weight:600; font-family:inherit; letter-spacing:0; }
+  :root[data-theme="skuf"] summary::-webkit-details-marker { display:revert; }
+  :root[data-theme="skuf"] details { background:none; border-radius:0; padding:0; }
+  :root[data-theme="skuf"] #files { padding:0; }
+  :root[data-theme="skuf"] #files div { padding:6px 12px; margin:0; border-radius:0; border-bottom:1px solid #f0f0f0; transform:none !important; }
+  :root[data-theme="skuf"] #files div.on { background:#e6eefb; color:#222; font-weight:600; border:none; box-shadow:none; }
+  :root[data-theme="skuf"] button { font:15px "Segoe UI", sans-serif; font-weight:400; padding:4px 10px; color:#000; background:#efefef; border:1px solid #767676; border-radius:3px; box-shadow:none; text-transform:none; letter-spacing:0; text-shadow:none; transform:none !important; filter:none !important; }
+  :root[data-theme="skuf"] button:hover { background:#e5e5e5; }
+  :root[data-theme="skuf"] #tabs button, :root[data-theme="skuf"] #ed .src button { background:#efefef; color:#000; }
+  :root[data-theme="skuf"] #tabs button[style*="700"] { background:#efefef; font-weight:700; }
+  :root[data-theme="skuf"] textarea, :root[data-theme="skuf"] input:not([type=checkbox]):not([type=file]) { font:15px "Segoe UI", sans-serif; border:1px solid #767676; border-radius:2px; background:#fff; padding:4px 6px; box-shadow:none !important; }
+  :root[data-theme="skuf"] textarea { font-size:16px; padding:6px; }
+  :root[data-theme="skuf"] .row { border-radius:0; margin:0; padding:6px 12px; border-bottom:1px solid #eee; transform:none !important; box-shadow:none !important; }
+  :root[data-theme="skuf"] .row.on { outline:2px solid #2a5db0; outline-offset:-2px; }
+  :root[data-theme="skuf"] .row.head { background:#fff; color:#777; font-weight:600; text-transform:none; letter-spacing:0; font-family:inherit; border-bottom:1px solid #ddd; box-shadow:none; }
+  :root[data-theme="skuf"] .k { font-weight:400; } :root[data-theme="skuf"] .s { color:#2a5db0; font-weight:400; }
+  :root[data-theme="skuf"] #bar { height:8px; border-radius:0; background:#eee; } :root[data-theme="skuf"] #bar i { border-radius:0; background:#2a5db0; animation:none; box-shadow:none; }
+  :root[data-theme="skuf"] #theme { border-radius:2px; border:1px solid #767676; background:#fff; font-weight:400; }
+  :root[data-theme="skuf"] #jsonHint { border-radius:0; background:#f4f4f4; }
+  :root[data-theme="skuf"] #toast { background:#333; color:#fff; border-radius:3px; box-shadow:none; font-weight:400; font-family:"Segoe UI", sans-serif; }
+  :root[data-theme="skuf"] .spark { display:none; }
+
+  /* ---- у каждой темы свои кнопки: форма, обводка, тень, наведение ---- */
+  /* кавай: пухлые пузыри с 3D-дном и покачиванием */
+  :root[data-theme="light"] button { border-radius:18px 18px 18px 6px; box-shadow:0 4px 0 #d9468f, 0 6px 14px #ff6fae44; }
+  :root[data-theme="light"] button:hover { animation:wiggle .4s ease-in-out; }
+  :root[data-theme="light"] button:active { box-shadow:0 1px 0 #d9468f; transform:translateY(3px); }
+  @keyframes wiggle { 25% { transform:rotate(-2deg) scale(1.03); } 75% { transform:rotate(2deg) scale(1.03); } }
+  /* кавай-ночь: неоновая обводка со свечением, заливка при наведении */
+  :root[data-theme="dark"] button { background:transparent; color:#ffb3d9; border:2px solid #ff8cc0; box-shadow:0 0 10px #ff8cc055, inset 0 0 8px #ff8cc033; text-shadow:0 0 6px #ff8cc0; }
+  :root[data-theme="dark"] button:hover { background:#ff8cc0; color:#231a2e; text-shadow:none; box-shadow:0 0 22px #ff8cc0aa; }
+  :root[data-theme="dark"] #tabs button { border-width:1px; }
+  /* блэк-метал: рваный край, капитель, дрожь при наведении */
+  :root[data-theme="dsbm"] button { clip-path:polygon(0 8%, 6% 0, 40% 6%, 70% 0, 100% 7%, 97% 52%, 100% 94%, 64% 100%, 30% 93%, 3% 100%, 0 60%); padding:7px 16px; font-variant:small-caps; }
+  :root[data-theme="dsbm"] button:hover { animation:shiver .25s linear infinite; }
+  @keyframes shiver { 25% { transform:translate(.5px, -.5px); } 50% { transform:translate(-.5px, .5px); } 75% { transform:translate(.5px, .5px); } }
+  /* вейпорвейв: наклонные плашки с хромом и сдвинутой тенью */
+  :root[data-theme="vapor"] button { border-radius:0; transform:skewX(-12deg); font-family:"Russo One", sans-serif; font-weight:400; text-transform:uppercase; letter-spacing:1px; box-shadow:4px 4px 0 #01cdfe, 8px 8px 0 #ff71ce55; }
+  :root[data-theme="vapor"] button:hover { transform:skewX(-12deg) translate(-2px, -2px); box-shadow:6px 6px 0 #01cdfe, 12px 12px 0 #ff71ce55; filter:none; }
+  :root[data-theme="vapor"] button:active { transform:skewX(-12deg) translate(3px, 3px); box-shadow:1px 1px 0 #01cdfe; }
+  :root[data-theme="vapor"] #ed .src button, :root[data-theme="vapor"] #tabs button { box-shadow:2px 2px 0 #01cdfe; }
+  /* терминал: [ кнопка ] в скобках, мигающий курсор при наведении */
+  :root[data-theme="term"] button::before { content:"[ " !important; } :root[data-theme="term"] button::after { content:" ]"; }
+  :root[data-theme="term"] button:hover::after { content:" ]█"; animation:blink 1s steps(1) infinite; }
+  :root[data-theme="term"] button { border:none; border-bottom:1px dashed #33ff66; padding:4px 6px; }
+  /* васи: деревянные таблички с печатью и тушевой тенью */
+  :root[data-theme="washi"] button { border-radius:2px 10px 2px 10px; border:1px solid #2b2420; box-shadow:3px 3px 0 #b7282e, 0 0 0 3px #fbf6ea inset; font-family:"Shippori Mincho", "PT Serif", serif; letter-spacing:1px; }
+  :root[data-theme="washi"] button:hover { background:#b7282e; box-shadow:3px 3px 0 #2b2420, 0 0 0 3px #fbf6ea inset; }
+  :root[data-theme="washi"] button:active { transform:translate(3px, 3px); box-shadow:none; }
+
+  /* ---- кнопка выбора файла в стиле темы ---- */
+  input[type=file] { color:var(--mute); font:12px inherit; }
+  input[type=file]::file-selector-button { font:inherit; font-weight:700; margin-right:8px; padding:4px 12px; cursor:pointer; border:none; border-radius:99px; color:#fff;
+    background:linear-gradient(135deg, var(--acc), var(--acc2)); box-shadow:0 3px 0 #c9558f55; }
+  :root[data-theme="light"] input[type=file]::file-selector-button { border-radius:14px 14px 14px 5px; box-shadow:0 3px 0 #d9468f; }
+  :root[data-theme="dark"] input[type=file]::file-selector-button { background:transparent; color:#ffb3d9; border:2px solid #ff8cc0; box-shadow:0 0 8px #ff8cc055; }
+  :root[data-theme="dsbm"] input[type=file]::file-selector-button { background:#161616; color:#bdb9b2; border:1px solid #ff3e9a55; border-radius:0; box-shadow:none; font-family:"Old Standard TT", serif; font-variant:small-caps; }
+  :root[data-theme="vapor"] input[type=file]::file-selector-button { border-radius:0; transform:skewX(-12deg); font-family:"Russo One", sans-serif; font-weight:400; text-transform:uppercase; box-shadow:3px 3px 0 #01cdfe; }
+  :root[data-theme="term"] input[type=file]::file-selector-button { background:#000; color:#33ff66; border:1px solid #33ff66; border-radius:0; box-shadow:none; font-family:"JetBrains Mono", monospace; }
+  :root[data-theme="washi"] input[type=file]::file-selector-button { background:#2b2420; color:#fbf6ea; border-radius:2px 8px 2px 8px; box-shadow:2px 2px 0 #b7282e; font-family:"Shippori Mincho", "PT Serif", serif; }
+  :root[data-theme="skuf"] input[type=file]::file-selector-button { font:13px "Segoe UI", sans-serif; color:#000; background:#efefef; border:1px solid #767676; border-radius:3px; box-shadow:none; padding:2px 8px; }
+  :root[data-theme="skuf"] input[type=file] { color:#222; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
@@ -639,6 +713,7 @@ const FX = {                          // смайлик в тосте и час�
   term:  {kao: ["[ok]", "$ _", "exit 0", "0x00"], spark: ["0", "1", "█", "1", "0"]},
   washi: {kao: ["🌸", "済", "〆", "🍵"], spark: ["🌸", "❀", "・", "✿", "🌸"]},
 };
+FX.skuf = {kao: [""], spark: ["", "", "", "", ""]};
 const fx = () => FX[document.documentElement.dataset.theme] || {kao: KAO, spark: ["✦", "♡", "✧", "⋆", "❀"]};
 let toastT = null;
 function toast(msg) {
@@ -669,7 +744,7 @@ const _save = save; save = async next => {
 const _copyPrompt = copyPrompt; copyPrompt = async () => { const t = await _copyPrompt(); if (t) toast("промпт в буфере"); return t; };
 const _copyView = copyView; copyView = async () => { await _copyView(); if (data && view.length) toast(`скопировала ${view.length} строк`); };
 const _doUpload = doUpload; doUpload = async () => { await _doUpload(); const m = $("upLog").textContent.match(/записано (\d+)/); if (m) toast(`записано ${m[1]} строк`); };
-const THEME_NAMES = {light: "☀️ Кавай", dark: "🌙 Кавай-ночь", dsbm: "†♡ Блэк-метал", vapor: "🌴 Вейпорвейв", term: "💾 Терминал", washi: "🌸 Васи"};
+const THEME_NAMES = {skuf: "🧔 Скуф (как было)", light: "☀️ Кавай", dark: "🌙 Кавай-ночь", dsbm: "†♡ Блэк-метал", vapor: "🌴 Вейпорвейв", term: "💾 Терминал", washi: "🌸 Васи"};
 const THEMES = Object.keys(THEME_NAMES);
 $("theme").innerHTML = THEMES.map(t => `<option value="${t}">${THEME_NAMES[t]}</option>`).join("");
 function curTheme() { const t = document.documentElement.dataset.theme; return t || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"); }
