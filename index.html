@@ -622,6 +622,8 @@ async function openAll(el) {
   $("list").innerHTML = `<div class="row grp"><span>Загружаю главы с непереведёнными: ${fs.length}…</span></div>`;
   allData = [];
   for (const f of fs) { try { allData.push({file: f, doc: await loadData(f)}); } catch (e) {} }
+  for (const {file: f, doc} of allData) { tabStats.left[f] = doc.lines.filter(l => todo(l, doc)).length; tabStats.total[f] = doc.lines.length; }
+  updAll();                             // счётчики могли устареть (допереводили после выгрузки) — по живым данным
   if (showAll) renderAll();
 }
 function allTodo() {                    // [{file, doc, idx}] — индексы строк без перевода по главам
