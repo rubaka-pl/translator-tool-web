@@ -44,9 +44,10 @@
   </div>
   <details id="xfer" style="margin:8px 12px 0"><summary style="cursor:pointer;font-weight:600">Выгрузка / загрузка</summary>
   <div style="margin-top:6px"><button style="width:100%" onclick="doExport()">Выгрузить вкладку (ZIP)</button>
-  <input type="file" id="upFile" accept=".zip,.json" style="width:100%;margin-top:6px;font-size:12px">
+  <textarea id="upText" placeholder="Вставь ответ ИИ как есть (даже кривой JSON)" style="height:70px;font-size:12px;margin-top:6px"></textarea>
+  <input type="file" id="upFile" accept=".zip,.json,.txt" style="width:100%;margin-top:4px;font-size:12px">
   <button id="upGo" style="width:100%;margin-top:4px" onclick="doUpload()">Загрузить перевод</button>
-  <div style="font-size:11px;color:#777;margin-top:4px">ZIP или .json из выгрузки; также можно {"ключ": "перевод"} — он пойдёт в открытый файл. Заполненные (зелёные) строки не трогаются.</div>
+  <div style="font-size:11px;color:#777;margin-top:4px">Вставь текст или выбери ZIP / .json / .txt. Строки сами разложатся по главам по ключам, открывать главу не нужно. Заполненные (зелёные) строки не трогаются.</div>
   <pre id="upLog" style="white-space:pre-wrap;font-size:11px;color:#555;max-height:140px;overflow:auto;margin:4px 0 0"></pre></div></details>
   <h1>Файлы</h1><div id="files"></div><div style="padding:8px 12px;border-top:1px solid #eee"><button id="promptBtn" style="width:100%" onclick="copyPrompt()">Скопировать промпт для другой ИИ</button></div><div id="dir"style="padding:8px 12px;color:#999;font-size:11px"></div></div>
 <div id="main">
@@ -160,7 +161,7 @@ async function gitUpload(f) {
   try {
     if (new Uint8Array(buf.slice(0, 2)).join() === "80,75") {
       const z = await JSZip.loadAsync(buf);
-      for (const n of Object.keys(z.files)) if (n.endsWith(".json") && !z.files[n].dir) parts.push([n.split("/").pop().slice(0, -5), JSON.parse(await z.files[n].async("string"))]);
+      for (const n of Object.keys(z.files)) if (n.endsWith(".json") && !z.files[n].dir) parts.push([n.split("/").pop().slice(0, -5), parseLoose(await z.files[n].async("string"))]);
     } else parts.push(["", JSON.parse(new TextDecoder().decode(buf))]);
   } catch (e) { return {ok: false, error: "Не разобрать файл: " + e.message}; }
   const names = new Set((await ghList("imports/" + tab)).map(x => x.name)), total = {set: 0, same: 0, kept: 0, unknown: 0, empty: 0}, files = [], skipped = [];
@@ -233,16 +234,38 @@ async function doImport() {
   } catch (e) { $("impLog").textContent = "Ошибка: " + e; }
   b.disabled = false;
 }
+function parseLoose(text) {             // ответ ИИ как есть: обычный JSON, JSON в ```…```, или с разорванными строками и без кавычек/запятых
+  const t = text.replace(/^﻿/, "").replace(/```[a-z]*/gi, "");
+  const a = t.indexOf("{"), b = t.lastIndexOf("}");
+  if (a >= 0 && b > a) { try { return JSON.parse(t.slice(a, b + 1)); } catch (e) {} }
+  // построчно: запись начинается с "ключ": "…, строка без такого начала — продолжение текста предыдущей записи
+  const out = {}; let k = null;
+  for (const raw of t.split(/\r?\n/)) {
+    const line = raw.trim(); if (!line || /^[{}\[\],]+$/.test(line)) continue;
+    const m = line.match(/^"([^"]+)"\s*:\s*"(.*)$/) || line.match(/^(\d+)\s*:\s*"(.*)$/);
+    if (m) { k = m[1]; out[k] = m[2]; } else if (k !== null) out[k] += " " + line;
+  }
+  for (const key in out) out[key] = out[key].replace(/"?\s*,?\s*}?\s*$/, "").replace(/\\"/g, '"').replace(/\\n/g, "\n").replace(/\\\\/g, "\\").replace(/\s+/g, " ").trim();
+  if (!Object.keys(out).length) throw new Error('не нашёл строк вида "ключ": "перевод"');
+  return out;
+}
 async function doUpload() {
-  const f = $("upFile").files[0]; if (!f) { $("upLog").textContent = "Выбери файл"; return; }
+  const f0 = $("upFile").files[0], txt = $("upText").value.trim();
+  if (!f0 && !txt) { $("upLog").textContent = "Вставь ответ ИИ или выбери файл"; return; }
   const b = $("upGo"); b.disabled = true; $("upLog").textContent = "Загружаю…";
   try {
+    let f = f0, parsed = null;               // текст и не-ZIP файлы разбираем здесь, дальше уходит уже ровный JSON
+    if (txt) parsed = parseLoose(txt);
+    else if (!/\.zip$/i.test(f0.name)) parsed = parseLoose(await f0.text());
+    if (parsed) f = new File([JSON.stringify(parsed)], "answer.json");
+    const n = parsed ? (Array.isArray(parsed.lines) ? parsed.lines.length : Object.keys(parsed).length) : 0;
     const url = "/api/upload?tab=" + encodeURIComponent(tab) + "&file=" + encodeURIComponent(file || "");
     const r = GIT ? await gitUpload(f) : await (await fetch(url, {method: "POST", body: await f.arrayBuffer()})).json();
     if (!r.ok) $("upLog").textContent = r.error;
     else {
       const t = r.total;
-      $("upLog").textContent = `записано ${t.set} · такие же ${t.same} · не тронуто заполненных ${t.kept} · пустых ${t.empty} · чужих ключей ${t.unknown}` +
+      if (txt) $("upText").value = ""; $("upFile").value = "";
+      $("upLog").textContent = (parsed ? `разобрано строк: ${n}\n` : "") + `записано ${t.set} · такие же ${t.same} · не тронуто заполненных ${t.kept} · пустых ${t.empty} · чужих ключей ${t.unknown}` +
         (r.skipped.length ? "\nнет такого файла: " + r.skipped.join(", ") : "") + "\n" + r.files.map(x => `${x.file}: +${x.set}`).join("\n");
       if (file) { data = await loadData(file); render(); pick(view[0] ?? -1); }
     }
