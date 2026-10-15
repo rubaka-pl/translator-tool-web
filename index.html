@@ -276,6 +276,7 @@ async function save(next) {
   render(); if (next) pick(nxt ?? (view[0] ?? -1)); else pick(i);
 }
 function move(d) { const p = view.indexOf(cur); const n = view[p + d]; if (n !== undefined) pick(n); }
+const SITE = "https://rubaka-pl.github.io/translator-tool-web/";
 function ranges(nums) {                 // [1,2,3,4,8,9] -> "1-4, 8-9"
   const out = []; let a = null, b = null;
   for (const n of nums) { if (a === null) a = b = n; else if (n === b + 1) b = n; else { out.push(a === b ? "" + a : a + "-" + b); a = b = n; } }
@@ -287,7 +288,11 @@ async function copyPrompt() {           // короткий промпт для 
   if (!data || !file) { btn.textContent = "Сначала открой главу"; setTimeout(() => btn.textContent = "Скопировать промпт для другой ИИ", 1800); return; }
   const idx = []; data.lines.forEach((l, i) => { if (todo(l)) idx.push(i + 1); });
   const text = idx.length
-    ? `Глава: ${file}\nНе переведены строки: ${ranges(idx)}\n(номер = порядок в lines, считая с 1)\n\nПереведи их на русский, остальные не трогай.\nОтвет: JSON {"key": "перевод"} только для этих строк, key из файла.`
+    ? `Контекст: любительский перевод визуальной новеллы «${tab}» с японского на русский. Переводим в браузерном переводчике ${SITE} (вкладка «${tab}», глава «${file}»); открывать сайт не нужно, работай по приложенному файлу главы.\n` +
+      `Формат файла: {"lines": [{"key", "spk", "jp", "old", "new"}]}: jp оригинал, spk говорящий, new готовый перевод (пустой, если ещё не переведено).\n\n` +
+      `Задача: переведи на русский строки главы ${file} под номерами ${ranges(idx)} (номер = порядок в lines, считая с 1). Остальные не трогай.\n` +
+      `Правила: переводи по смыслу, живым русским, без добавлений от себя; имена, обращения и стиль бери из уже переведённых соседних строк (поле new); сохраняй разметку и переносы.\n` +
+      `Ответ: только JSON {"key": "перевод"} для этих строк, key из файла. Я загружу его на сайте кнопкой «Загрузить перевод».`
     : `Глава: ${file}\nВсё переведено.`;
   try { await navigator.clipboard.writeText(text); }
   catch (e) { const t = document.createElement("textarea"); t.value = text; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); }
