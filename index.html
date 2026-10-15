@@ -330,7 +330,7 @@
     <select id="theme" title="тема" onchange="setTheme(this.value)"></select>
   </div>
   <div id="list"></div>
-  <div id="mid"><button id="copyView" onclick="copyView()">Промпт + всё на экране</button> <button id="copy10" class="copyN" onclick="copyN(10, this)">Промпт + 10 строк</button> <button class="copyN" onclick="copyN(30, this)">+ 30</button> <button class="copyN" onclick="copyN(50, this)">+ 50</button> <button class="copyN" onclick="copyN(100, this)">+ 100</button> <button id="copyTodo" onclick="copyTodo()">Промпт + все непереведённые</button></div>
+  <div id="mid"><button id="copyView" onclick="copyView()">Промпт + всё на экране</button> <button id="copy10" class="copyN" onclick="copyN(10, this)">Промпт + 10 строк</button> <button class="copyN" onclick="copyN(30, this)">+ 30</button> <button class="copyN" onclick="copyN(50, this)">+ 50</button> <button class="copyN" onclick="copyN(100, this)">+ 100</button> <button id="copyTodo" onclick="copyTodo()">Промпт + все непереведённые</button> <button id="oldAll" onclick="oldToNewAll()" title="во все пустые строки главы подставить старый перевод">Старый → мой (вся глава)</button></div>
   <div id="ed">
     <div class="src"><b>№ / кто</b><span id="eKey"></span></div>
     <div class="src"><b>Японский</b><span id="eJp"></span> <button onclick="cp('jp')">копировать</button></div>
@@ -640,6 +640,21 @@ const SITE = "https://rubaka-pl.github.io/translator-tool-web/";
 function oldToNew() {                  // старый перевод в поле «Мой перевод» (не сохраняет: поправь и Enter)
   if (cur < 0 || !data) return;
   const e = $("eNew"); e.value = data.lines[cur].old || ""; e.focus(); e.setSelectionRange(e.value.length, e.value.length);
+}
+async function oldToNewAll() {         // во все строки главы без перевода — старый перевод (заполненные и пропущенные нарочно не трогаются)
+  const btn = $("oldAll"), label = "Старый → мой (вся глава)";
+  const idx = data ? data.lines.map((l, i) => i).filter(i => todo(data.lines[i]) && (data.lines[i].old || "").trim() && !JP.test(data.lines[i].old)) : [];
+  if (!idx.length) { btn.textContent = data ? "Нечего подставлять" : "Сначала открой главу"; setTimeout(() => btn.textContent = label, 1800); return; }
+  if (!confirm(`Подставить старый перевод в ${idx.length} пустых строк главы ${file}?
+Имена в старом переводе бывают другие (например, «Алиса» вместо «Арису») — их потом поправь.`)) return;
+  const upd = {};
+  for (const i of idx) { const l = data.lines[i]; l.new = l.old.trim(); upd[l.key] = l.new; }
+  if (GIT) {
+    Object.assign(pending[dataPath(file)] ||= {}, upd);
+    await flush();
+  } else await fetch("/api/upload?tab=" + encodeURIComponent(tab) + "&file=" + encodeURIComponent(file), {method: "POST", body: JSON.stringify(upd)});
+  render(); pick(cur);
+  btn.textContent = `Подставлено: ${idx.length}`; setTimeout(() => btn.textContent = label, 2500);
 }
 async function copyText(text) {
   try { await navigator.clipboard.writeText(text); }
