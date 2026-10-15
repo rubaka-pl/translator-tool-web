@@ -31,6 +31,8 @@
   #files div::before { content:"♡ "; color:var(--acc); }
   #files div:hover { background:var(--on); transform:translateX(3px); }
   .row.skip { opacity:.45; font-style:italic; }
+  #files div.all { font-weight:800; }
+  #files div.all::before { content:""; }
   #files div.ok { color:var(--mute); opacity:.65; }
   #files div.ok::before { content:"✓ "; color:var(--mute); }
   #files div.on { background:linear-gradient(90deg, var(--acc), var(--acc2)); color:#fff; font-weight:800; }
@@ -408,8 +410,8 @@ async function gitFiles() {
   const tabs = (await ghList("imports")).filter(x => x.type === "dir").map(x => x.name);
   if (!tab) tab = tabs[0];
   const files = (await ghList("imports/" + tab)).filter(x => x.name.endsWith(".json")).map(x => x.name.slice(0, -5));
-  let left = {}; try { left = (await ghRead("stats/" + tab + ".json")).data; } catch (e) {}   // сколько непереведённых в каждой главе (пишет выгрузка)
-  return {tabs, files, left, dir: DATA_REPO + "/imports/" + tab};
+  let st = {}; try { st = (await ghRead("stats/" + tab + ".json")).data; } catch (e) {}   // {left, total} по главам (пишет выгрузка)
+  return {tabs, files, left: st.left || st, total: st.total || {}, dir: DATA_REPO + "/imports/" + tab};
 }
 async function loadData(f) {
   if (!GIT) return (await fetch("/api/file/" + encodeURIComponent(f) + "?tab=" + encodeURIComponent(tab))).json();
@@ -523,6 +525,9 @@ async function loadFiles() {
   $("dir").textContent = r.dir;
   if (tab) loadGloss();
   $("files").innerHTML = "";
+  tabStats = {left: {...(r.left || {})}, total: {...(r.total || {})}}; showAll = false;
+  const a = document.createElement("div"); a.className = "all"; a.id = "allProg"; a.onclick = () => openAll(a);
+  $("files").appendChild(a); updAll();
   for (const f of r.files) {
     const d = document.createElement("div"); d.textContent = f; d.dataset.f = f; d.onclick = () => openFile(f, d);
     if (r.left && r.left[f] === 0) d.classList.add("ok");          // переводить нечего — серая
@@ -583,8 +588,27 @@ async function doUpload() {
 function markFile() {                  // открытая глава: серая, если в ней не осталось строк без перевода
   const el = [...$("files").children].find(x => x.dataset.f === file);
   if (el && data) el.classList.toggle("ok", !data.lines.some(todo));
+  if (data && file) { tabStats.left[file] = data.lines.filter(todo).length; tabStats.total[file] = data.lines.length; updAll(); }
+}
+// ---- общий прогресс вкладки: по счётчикам глав (stats), открытая глава — по живым данным ----
+let tabStats = {left: {}, total: {}}, showAll = false;
+function allNums() {
+  const fs = Object.keys(tabStats.total); if (!fs.length) return null;
+  const n = fs.reduce((a, f) => a + tabStats.total[f], 0), left = fs.reduce((a, f) => a + (tabStats.left[f] || 0), 0);
+  return {n, done: n - left, left, p: n ? (n - left) / n * 100 : 0};
+}
+function updAll() {
+  const a = $("allProg"); if (!a) return;
+  const s = allNums();
+  a.textContent = s ? `📊 Общий прогресс — ${s.p.toFixed(1)}%` : "📊 Общий прогресс";
+  if (showAll) updBar();
+}
+function openAll(el) {
+  document.querySelectorAll("#files div").forEach(x => x.classList.remove("on")); el.classList.add("on");
+  showAll = true; updBar();
 }
 async function openFile(f, el) {
+  showAll = false;
   document.querySelectorAll("#files div").forEach(x => x.classList.remove("on")); el.classList.add("on");
   file = f; data = await loadData(f); render(); pick(view[0] ?? -1);
 }
@@ -828,7 +852,15 @@ function sparkle(x, y) {
 }
 document.addEventListener("click", e => { const b = e.target.closest("button"); if (b) sparkle(e.clientX, e.clientY); });
 function updBar() {
-  const i = document.querySelector("#bar i"); if (!data) { i.style.width = "0"; return; }
+  const i = document.querySelector("#bar i");
+  if (showAll) {
+    const s = allNums();
+    i.style.width = (s ? s.p : 0) + "%";
+    $("bar").title = s ? `вся вкладка: переведено ${s.done} из ${s.n}` : "нет данных по главам";
+    $("st").textContent = s ? `вся вкладка «${tab}» · строк ${s.n} · переведено ${s.done} (${s.p.toFixed(1)}%) · без перевода ${s.left}` : "по вкладке нет данных";
+    return;
+  }
+  if (!data) { i.style.width = "0"; return; }
   const n = data.lines.length, done = data.lines.filter(l => !todo(l)).length;
   i.style.width = (n ? done / n * 100 : 0) + "%"; $("bar").title = `переведено ${done} из ${n}`;
 }
