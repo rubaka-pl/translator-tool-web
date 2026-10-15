@@ -329,7 +329,7 @@
     <select id="theme" title="тема" onchange="setTheme(this.value)"></select>
   </div>
   <div id="list"></div>
-  <div id="mid"><button id="copyView" onclick="copyView()">Промпт + всё на экране</button> <button id="copy10" class="copyN" onclick="copyN(10, this)">Промпт + 10 строк</button> <button class="copyN" onclick="copyN(30, this)">+ 30</button> <button class="copyN" onclick="copyN(50, this)">+ 50</button> <button class="copyN" onclick="copyN(100, this)">+ 100</button></div>
+  <div id="mid"><button id="copyView" onclick="copyView()">Промпт + всё на экране</button> <button id="copy10" class="copyN" onclick="copyN(10, this)">Промпт + 10 строк</button> <button class="copyN" onclick="copyN(30, this)">+ 30</button> <button class="copyN" onclick="copyN(50, this)">+ 50</button> <button class="copyN" onclick="copyN(100, this)">+ 100</button> <button id="copyTodo" onclick="copyTodo()">Промпт + все непереведённые</button></div>
   <div id="ed">
     <div class="src"><b>№ / кто</b><span id="eKey"></span></div>
     <div class="src"><b>Японский</b><span id="eJp"></span> <button onclick="cp('jp')">копировать</button></div>
@@ -654,6 +654,16 @@ async function copyN(n, el) {               // n строк списка, нач
   await copyText(promptMini(part.filter(i => todo(data.lines[i])).map(i => data.lines[i].key), lines));     // промпт + сами строки
   btn.textContent = `Скопировано ${lines.length}: ${lines[0].key}…${lines[lines.length - 1].key}`; setTimeout(() => btn.textContent = label, 2500);
   if (typeof toast === "function") toast(`скопировала ${lines.length} строк`);
+}
+async function copyTodo() {               // все строки главы без перевода (фильтр и поиск не важны) + по соседней строке до и после для контекста
+  const btn = $("copyTodo"), label = "Промпт + все непереведённые";
+  const need = data ? data.lines.map((l, i) => i).filter(i => todo(data.lines[i])) : [];
+  if (!need.length) { btn.textContent = data ? "Всё переведено" : "Сначала открой главу"; setTimeout(() => btn.textContent = label, 1800); return; }
+  const take = new Set(); for (const i of need) for (const j of [i - 1, i, i + 1]) if (j >= 0 && j < data.lines.length) take.add(j);
+  const lines = [...take].sort((a, b) => a - b).map(i => { const l = data.lines[i]; return {key: l.key, spk: l.spk || "", jp: l.jp || "", old: l.old || "", new: l.new || ""}; });
+  await copyText(promptMini(need.map(i => data.lines[i].key), lines));
+  btn.textContent = `Скопировано без перевода: ${need.length}`; setTimeout(() => btn.textContent = label, 2500);
+  if (typeof toast === "function") toast(`скопировала ${need.length} непереведённых строк`);
 }
 function ranges(nums) {                 // [1,2,3,4,8,9] -> "1-4, 8-9"
   const out = []; let a = null, b = null;
