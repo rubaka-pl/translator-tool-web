@@ -3,35 +3,87 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Перевод строк</title>
+<title>Шайтан-переводчик</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;800&family=M+PLUS+Rounded+1c:wght@400;700&display=swap" rel="stylesheet">
 <style>
-  :root { --bg:#f6f6f4; --panel:#fff; --line:#ddd; --ink:#222; --mute:#777; --acc:#2a5db0; --done:#e8f3e8; --todo:#fff6e0; }
+  :root {
+    --bg1:#fff0f7; --bg2:#f1ebff; --panel:#ffffffd9; --line:#f3d6e6; --ink:#4a3557; --mute:#9a86a8;
+    --acc:#ff6fae; --acc2:#a98bff; --done:#e2fbef; --doneInk:#2f8f63; --todo:#fff6e3; --on:#ffe3f0; --shadow:0 6px 24px #e9b3d433;
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    --bg1:#231a2e; --bg2:#1b1d33; --panel:#2b2240e6; --line:#4a3a5e; --ink:#f6e9ff; --mute:#b9a3cc;
+    --acc:#ff8cc0; --acc2:#b79dff; --done:#1f3b33; --doneInk:#8ff0c0; --todo:#3a3020; --on:#47304f; --shadow:0 6px 24px #0006; } }
+  :root[data-theme="dark"] {
+    --bg1:#231a2e; --bg2:#1b1d33; --panel:#2b2240e6; --line:#4a3a5e; --ink:#f6e9ff; --mute:#b9a3cc;
+    --acc:#ff8cc0; --acc2:#b79dff; --done:#1f3b33; --doneInk:#8ff0c0; --todo:#3a3020; --on:#47304f; --shadow:0 6px 24px #0006; }
   * { box-sizing: border-box; }
-  body { margin:0; font:15px/1.45 "Segoe UI", system-ui, sans-serif; background:var(--bg); color:var(--ink); display:flex; height:100vh; }
-  #side { width:300px; border-right:1px solid var(--line); background:var(--panel); display:flex; flex-direction:column; }
-  #side h1 { font-size:15px; margin:12px; }
-  #files { overflow:auto; flex:1; }
-  #files div { padding:6px 12px; cursor:pointer; border-bottom:1px solid #f0f0f0; font-size:13px; }
-  #files div.on { background:#e6eefb; font-weight:600; }
-  #files small { color:var(--mute); float:right; }
-  #main { flex:1; display:flex; flex-direction:column; min-width:0; }
-  #top { padding:8px 12px; border-bottom:1px solid var(--line); background:var(--panel); display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
-  #list { flex:1; overflow:auto; }
-  .row { display:grid; grid-template-columns:64px 80px 1fr 1fr 1fr; gap:8px; padding:6px 12px; border-bottom:1px solid #eee; cursor:pointer; font-size:13px; }
+  body { margin:0; font:15px/1.5 "Nunito", "M PLUS Rounded 1c", "Segoe UI", system-ui, sans-serif; color:var(--ink); display:flex; height:100vh;
+    background: radial-gradient(circle at 10% 10%, #ffd6ea55 0 120px, transparent 121px), radial-gradient(circle at 90% 85%, #d9ccff55 0 160px, transparent 161px), linear-gradient(135deg, var(--bg1), var(--bg2)); }
+  #side { width:310px; margin:10px 0 10px 10px; border-radius:22px; background:var(--panel); box-shadow:var(--shadow); display:flex; flex-direction:column; overflow:auto; backdrop-filter: blur(6px); }
+  #logo { padding:14px 14px 4px; font-weight:800; font-size:17px; letter-spacing:.3px; }
+  #logo .kao { display:inline-block; color:var(--acc); animation:bob 2.4s ease-in-out infinite; }
+  #logo small { display:block; font-weight:600; font-size:11px; color:var(--mute); }
+  #side h1 { font-size:14px; margin:14px 14px 6px; }
+  #side h1::before { content:"📚 "; }
+  #files { overflow:auto; flex:1; padding:0 8px; min-height:120px; }
+  #files div { padding:7px 12px; margin:3px 0; cursor:pointer; border-radius:12px; font-size:13px; transition:background .15s, transform .15s; }
+  #files div::before { content:"♡ "; color:var(--acc); }
+  #files div:hover { background:var(--on); transform:translateX(3px); }
+  #files div.on { background:linear-gradient(90deg, var(--acc), var(--acc2)); color:#fff; font-weight:800; }
+  #files div.on::before { content:"❤ "; color:#fff; }
+  #main { flex:1; display:flex; flex-direction:column; min-width:0; margin:10px; gap:10px; }
+  #top, #ed, #mid { background:var(--panel); border-radius:22px; box-shadow:var(--shadow); backdrop-filter: blur(6px); }
+  #top { padding:10px 14px; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  #bar { flex:1; min-width:140px; height:12px; border-radius:99px; background:var(--line); overflow:hidden; }
+  #bar i { display:block; height:100%; width:0; border-radius:99px; background:linear-gradient(90deg, var(--acc), var(--acc2), #7fd8ff); background-size:200% 100%; animation:shine 3s linear infinite; transition:width .5s; }
+  #list { flex:1; overflow:auto; background:var(--panel); border-radius:22px; box-shadow:var(--shadow); padding:6px; }
+  .row { display:grid; grid-template-columns:64px 80px 1fr 1fr 1fr; gap:8px; padding:8px 12px; margin:4px 2px; border-radius:14px; cursor:pointer; font-size:13px; transition:transform .12s, box-shadow .12s; }
+  .row:hover { transform:scale(1.005); box-shadow:0 2px 10px #ff6fae22; }
   .row.todo { background:var(--todo); } .row.done { background:var(--done); }
-  .row.on { outline:2px solid var(--acc); outline-offset:-2px; }
-  .k { color:var(--mute); } .s { color:var(--acc); }
-  #ed { border-top:1px solid var(--line); background:var(--panel); padding:10px 12px; }
-  #ed .src { margin:2px 0; }
-  #ed .src b { display:inline-block; width:70px; color:var(--mute); font-weight:500; }
-  textarea { width:100%; height:70px; font:16px "Segoe UI", sans-serif; padding:6px; margin-top:6px; }
-  button { font:inherit; padding:4px 10px; cursor:pointer; }
-  #st { color:var(--mute); font-size:13px; }
+  .row.done .k::after { content:" ✓"; color:var(--doneInk); font-weight:800; }
+  .row.on { outline:2px solid var(--acc); outline-offset:-2px; box-shadow:0 0 0 4px #ff6fae33; }
+  .k { color:var(--mute); font-weight:700; } .s { color:var(--acc2); font-weight:700; }
+  #mid { text-align:center; padding:6px; }
+  #ed { padding:12px 14px; }
+  #ed .src { margin:3px 0; }
+  #ed .src b { display:inline-block; width:80px; color:var(--mute); font-weight:700; }
+  textarea, input:not([type=checkbox]):not([type=file]) { width:100%; font:15px "Nunito", "M PLUS Rounded 1c", sans-serif; padding:8px 10px; border:2px solid var(--line); border-radius:14px; background:transparent; color:var(--ink); outline:none; transition:border-color .15s, box-shadow .15s; }
+  #q { width:auto; }
+  textarea { height:74px; margin-top:6px; resize:vertical; }
+  textarea:focus, input:focus { border-color:var(--acc); box-shadow:0 0 0 4px #ff6fae22; }
+  button { font:inherit; font-weight:700; padding:6px 14px; cursor:pointer; border:none; border-radius:99px; color:#fff;
+    background:linear-gradient(135deg, var(--acc), var(--acc2)); box-shadow:0 3px 0 #c9558f55; transition:transform .1s, filter .15s; }
+  button:hover { filter:brightness(1.07) saturate(1.1); transform:translateY(-1px); }
+  button:active { transform:translateY(2px) scale(.97); box-shadow:none; }
+  button:disabled { filter:grayscale(.6); opacity:.7; cursor:wait; }
+  #tabs button { background:var(--on); color:var(--ink); box-shadow:none; padding:4px 12px; }
+  #tabs button[style*="700"] { background:linear-gradient(135deg, var(--acc), var(--acc2)); color:#fff; }
+  #ed .src button { padding:2px 10px; font-size:12px; background:var(--on); color:var(--ink); box-shadow:none; }
+  details { border-radius:16px; background:#ffffff22; padding:6px 8px; }
+  summary { cursor:pointer; font-weight:800; list-style:none; }
+  summary::-webkit-details-marker { display:none; }
+  summary::before { content:"✦ "; color:var(--acc); }
+  details[open] summary::before { content:"✧ "; }
+  #imp summary::after { content:" 🔮"; } #xfer summary::after { content:" 📦"; }
+  #syncBtn::before { content:"☁️ "; } #upGo::before { content:"📥 "; } #promptBtn::before { content:"✨ "; } #copyView::before { content:"📋 "; }
+  button[onclick^="save"]::before { content:"💾 "; } button[onclick="doExport()"]::before { content:"📤 "; } #impGo::before { content:"🕯️ "; }
+  #st { color:var(--mute); font-size:13px; font-weight:700; }
+  pre { color:var(--mute) !important; }
+  #toast { position:fixed; left:50%; bottom:26px; transform:translate(-50%, 30px); opacity:0; pointer-events:none; z-index:9;
+    background:linear-gradient(135deg, var(--acc), var(--acc2)); color:#fff; font-weight:800; padding:10px 18px; border-radius:99px; box-shadow:0 8px 30px #ff6fae55; transition:all .3s cubic-bezier(.3,1.6,.6,1); }
+  #toast.show { opacity:1; transform:translate(-50%, 0); }
+  .spark { position:fixed; pointer-events:none; z-index:10; font-size:16px; animation:spark .8s ease-out forwards; }
+  @keyframes bob { 50% { transform:translateY(-3px) rotate(-4deg); } }
+  @keyframes shine { to { background-position:-200% 0; } }
+  @keyframes spark { to { transform:translate(var(--dx), var(--dy)) scale(.4) rotate(160deg); opacity:0; } }
+  @media (prefers-reduced-motion: reduce) { *, *::before { animation:none !important; transition:none !important; } }
+  @media (max-width: 760px) { body { flex-direction:column; height:auto; } #side { width:auto; margin:10px 10px 0; } .row { grid-template-columns:56px 1fr; } .row span:nth-child(n+4) { grid-column:1 / -1; } }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
-<div id="side"><div id="tabs" style="display:flex;gap:4px;padding:8px 8px 0;flex-wrap:wrap"></div><details id="imp" style="margin:8px 12px 0"><summary style="cursor:pointer;font-weight:600">Врата Извлечения</summary>
+<div id="side"><div id="logo"><span class="kao">(｡•ᴗ•｡)♡</span> Шайтан-переводчик<small>переводим новеллы по любви ✧</small></div><div id="tabs" style="display:flex;gap:4px;padding:8px 8px 0;flex-wrap:wrap"></div><details id="imp" style="margin:8px 12px 0"><summary style="cursor:pointer;font-weight:600">Врата Извлечения</summary>
   <div style="margin-top:6px"><button style="width:100%;margin-bottom:4px" onclick="browse()">Указать обитель игры…</button>
   <input id="impPath" placeholder="или вставь путь к папке игры" style="width:100%;padding:4px 6px">
   <input id="impName" placeholder="имя вкладки (необязательно)" style="width:100%;padding:4px 6px;margin-top:4px">
@@ -55,9 +107,11 @@
     <label><input type="checkbox" id="onlyTodo" checked> только без перевода</label>
     <input id="q" placeholder="поиск…" style="padding:4px 6px">
     <span id="st"></span>
+    <div id="bar" title="сколько переведено в главе"><i></i></div>
+    <button id="theme" title="тема" onclick="toggleTheme()" style="padding:4px 10px">🌙</button>
   </div>
   <div id="list"></div>
-  <div style="text-align:center;padding:6px;border-top:1px solid var(--line);background:var(--panel)"><button id="copyView" onclick="copyView()">Скопировать всё, что на экране (с ключами)</button></div>
+  <div id="mid"><button id="copyView" onclick="copyView()">Скопировать всё, что на экране (с ключами)</button></div>
   <div id="ed">
     <div class="src"><b>№ / кто</b><span id="eKey"></span></div>
     <div class="src"><b>Японский</b><span id="eJp"></span> <button onclick="cp('jp')">копировать</button></div>
@@ -355,7 +409,7 @@ async function copyPrompt() {           // короткий промпт для 
       `- Переводим по смыслу и так, как это задумал автор: передавай интонацию, юмор, сухость или грубость оригинала, а не дословный текст. Звучать должно как написанное по-русски с нуля.\n` +
       `- Ничего не добавляй от себя и ничего не выпускай. Не «улучшай» текст, не поднимай регистр, не смягчай и не усиливай эмоции.\n` +
       `- Имена, обращения, термины и манеру речи персонажей бери из уже переведённых соседних строк (поле new).\n` +
-      `- Не используй длинное тире «—» и двойной дефис «--» вообще (это приметы машинного текста). Перестраивай фразу: запятая, двоеточие, точка или «…». «――» из японского не переноси как тире: это пауза или протяжка, передавай её точкой, запятой или «…».\n` +
+      `- Не используй длинное тире «—» и двойной дефис «--» вообще (это приметы машинного текста). Перестраивай фразу: запятая, двоеточие, точка или «…». «――» из японского не переноси как тире: это пауза или протяжка, передавай её точкой, запятой или «…». Но если без тире фраза прямо не складывается, тогда можно.\n` +
       `- «…» одним знаком, «……» превращай в «…». Реплики в «…», мысли в (…), вложенные кавычки „…“.\n` +
       `- Сохраняй разметку, теги и переносы строк как в оригинале.\n` +
       `- Сексуальные сцены с персонажами, которые несовершеннолетние или могут ими быть, не переводи: пропусти эти строки.\n\n` +
@@ -363,7 +417,7 @@ async function copyPrompt() {           // короткий промпт для 
       `1. Вместо JSON выдали Python-скрипт с переводом внутри. Скрипт, код, файл-патч и markdown мне не нужны, только JSON-ответ.\n` +
       `2. Перевели часть строк: из 223 непереведённых строк главы 004_scene_03 в ответе было 98. Переводи ВСЕ указанные key до конца, не останавливайся на середине. Если какую-то строку пропустила, назови её key и причину.\n` +
       `3. Переводили сцену выборочно, пропуская строки без причины. Переводи всё по списку, кроме того, что запрещено правилом выше. Список пропущенных key с причиной дай после JSON.\n` +
-      `4. В переводе остались длинные тире «—» (например, «…вышла замуж — брак был бы…», «Хочешь выжить — придётся…»). Тире нельзя, перестрой фразу: запятая, двоеточие или точка.\n` +
+      `4. В переводе остались длинные тире «—» (например, «…вышла замуж — брак был бы…», «Хочешь выжить — придётся…»). Перестраивай фразу: запятая, двоеточие или точка; тире только если по-другому никак.\n` +
       `5. «……» и «…………» оставляли как есть. Всегда пиши «…» одним знаком.\n` +
       `6. Путали номер строки и key. Ключи в файле идут не подряд (например, 4207, 4209, 4213), поэтому в JSON используй только key из списка выше (строкой, в кавычках), не порядковый номер и не свои номера.\n` +
       `7. Кавычка, открытая в одной строке и закрытая в другой, это нормально: реплика разбита на несколько строк. Не добавляй закрывающую «»» там, где её нет в оригинале строки.\n` +
@@ -389,6 +443,46 @@ $("onlyTodo").onchange = () => { render(); pick(view[0] ?? -1); };
 $("q").oninput = render;
 if (GIT) { $("imp").style.display = "none"; $("syncBtn").textContent = "Отправить в репозиторий сейчас"; }
 loadFiles().catch(e => setGit("Ошибка: " + e.message));
+</script>
+<div id="toast"></div>
+<script>
+// ---- кавай-слой: тосты, искорки, полоска прогресса, тема. Логику не трогает, только оборачивает ----
+const KAO = ["(｡•ᴗ•｡)♡", "(ﾉ◕ヮ◕)ﾉ*:･ﾟ✧", "ʕ•ᴥ•ʔ", "(=^･ω･^=)", "(*≧▽≦)", "✧(｡•̀ᴗ-)✧", "(っ˘ω˘ς )"];
+let toastT = null;
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg + "  " + KAO[Math.floor(Math.random() * KAO.length)];
+  t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 1800);
+}
+function sparkle(x, y) {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  for (let i = 0; i < 8; i++) {
+    const s = document.createElement("span"); s.className = "spark"; s.textContent = ["✦", "♡", "✧", "⋆", "❀"][i % 5];
+    s.style.left = x + "px"; s.style.top = y + "px"; s.style.color = i % 2 ? "var(--acc)" : "var(--acc2)";
+    const a = Math.PI * 2 * i / 8; s.style.setProperty("--dx", Math.cos(a) * 46 + "px"); s.style.setProperty("--dy", Math.sin(a) * 46 - 20 + "px");
+    document.body.appendChild(s); setTimeout(() => s.remove(), 850);
+  }
+}
+document.addEventListener("click", e => { const b = e.target.closest("button"); if (b) sparkle(e.clientX, e.clientY); });
+function updBar() {
+  const i = document.querySelector("#bar i"); if (!data) { i.style.width = "0"; return; }
+  const n = data.lines.length, done = data.lines.filter(l => !todo(l)).length;
+  i.style.width = (n ? done / n * 100 : 0) + "%"; $("bar").title = `переведено ${done} из ${n}`;
+}
+const _render = render; render = () => { _render(); updBar(); };
+$("q").oninput = render; $("onlyTodo").onchange = () => { render(); pick(view[0] ?? -1); };
+const _save = save; save = async next => {
+  const before = cur; await _save(next);
+  if (before >= 0) { const r = $("eNew").getBoundingClientRect(); sparkle(r.left + 60, r.top + 10); toast(GIT ? "запомнила, отправлю~" : "сохранено~"); }
+};
+const _copyPrompt = copyPrompt; copyPrompt = async () => { const t = await _copyPrompt(); if (t) toast("промпт в буфере"); return t; };
+const _copyView = copyView; copyView = async () => { await _copyView(); if (data && view.length) toast(`скопировала ${view.length} строк`); };
+const _doUpload = doUpload; doUpload = async () => { await _doUpload(); const m = $("upLog").textContent.match(/записано (\d+)/); if (m) toast(`записано ${m[1]} строк`); };
+function toggleTheme() {
+  const r = document.documentElement, dark = r.dataset.theme ? r.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  r.dataset.theme = dark ? "light" : "dark"; $("theme").textContent = dark ? "🌙" : "☀️";
+  try { localStorage.theme = r.dataset.theme; } catch (e) {}
+}
+try { if (localStorage.theme) { document.documentElement.dataset.theme = localStorage.theme; $("theme").textContent = localStorage.theme === "dark" ? "☀️" : "🌙"; } } catch (e) {}
 </script>
 </body>
 </html>
