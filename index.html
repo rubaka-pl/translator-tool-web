@@ -334,7 +334,7 @@
   <div id="ed">
     <div class="src"><b>№ / кто</b><span id="eKey"></span></div>
     <div class="src"><b>Японский</b><span id="eJp"></span> <button onclick="cp('jp')">копировать</button></div>
-    <div class="src"><b>Старый</b><span id="eOld"></span> <button onclick="cp('old')">копировать</button></div>
+    <div class="src"><b>Старый</b><span id="eOld"></span> <button onclick="cp('old')">копировать</button> <button onclick="oldToNew()" title="подставить старый перевод в поле «Мой перевод»; поправь и Enter">→ в мой перевод</button></div>
     <textarea id="eNew" placeholder="Мой перевод. Enter — сохранить и дальше, Shift+Enter — перенос строки"></textarea>
     <button onclick="save(true)">Сохранить и дальше (Enter)</button>
     <button onclick="move(-1)">← назад</button> <button onclick="move(1)">вперёд →</button>
@@ -637,6 +637,10 @@ async function save(next) {
 }
 function move(d) { const p = view.indexOf(cur); const n = view[p + d]; if (n !== undefined) pick(n); }
 const SITE = "https://rubaka-pl.github.io/translator-tool-web/";
+function oldToNew() {                  // старый перевод в поле «Мой перевод» (не сохраняет: поправь и Enter)
+  if (cur < 0 || !data) return;
+  const e = $("eNew"); e.value = data.lines[cur].old || ""; e.focus(); e.setSelectionRange(e.value.length, e.value.length);
+}
 async function copyText(text) {
   try { await navigator.clipboard.writeText(text); }
   catch (e) { const t = document.createElement("textarea"); t.value = text; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); }
