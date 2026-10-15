@@ -82,7 +82,7 @@ const setGit = t => { $("gitst").textContent = t; };
 const dataPath = f => `imports/${tab}/${f}.json`;
 async function ghApi(path, opt = {}) {
   const r = await fetch(`https://api.github.com/repos/${DATA_REPO}/contents/${enc(path)}` + (opt.method ? "" : "?ref=" + BRANCH),
-    {...opt, headers: {Authorization: "Bearer " + TOKEN, Accept: "application/vnd.github+json"}});
+    {...opt, cache: "no-store", headers: {Authorization: "Bearer " + TOKEN, Accept: "application/vnd.github+json"}});
   if (r.status === 401) showToken("Токен не подошёл — вставь заново");
   return r;
 }
