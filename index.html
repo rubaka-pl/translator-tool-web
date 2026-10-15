@@ -30,6 +30,7 @@
   #files div { padding:7px 12px; margin:3px 0; cursor:pointer; border-radius:12px; font-size:13px; transition:background .15s, transform .15s; }
   #files div::before { content:"♡ "; color:var(--acc); }
   #files div:hover { background:var(--on); transform:translateX(3px); }
+  .row.skip { opacity:.45; font-style:italic; }
   #files div.ok { color:var(--mute); opacity:.65; }
   #files div.ok::before { content:"✓ "; color:var(--mute); }
   #files div.on { background:linear-gradient(90deg, var(--acc), var(--acc2)); color:#fff; font-weight:800; }
@@ -343,7 +344,8 @@
 const JP = /[぀-ヿ㐀-䶿一-鿿]/;
 let tab = "", file = null, data = null, view = [], cur = -1;
 const $ = id => document.getElementById(id);
-const todo = l => !l.new && (JP.test(l.old || "") || !(l.old || "").trim());
+// без перевода: пустой new; old не считается, если он чужой (foreign_old в файле главы) или японский; skip — пропущено нарочно
+const todo = l => !l.new && !l.skip && (!!(data && data.foreign_old) || JP.test(l.old || "") || !(l.old || "").trim());
 
 // ---- режим GitHub Pages: данные лежат в репозитории, читаем и пишем через API (нужен токен) ----
 const GIT = location.hostname.endsWith(".github.io");
@@ -602,10 +604,10 @@ function render() {
   if (ex.length) $("jsonHint").textContent = "{\n" + ex.map(k => `  "${k}": "перевод строки ${k}"`).join(",\n") + "\n}";
   for (const i of view) {
     const l = data.lines[i], d = document.createElement("div");
-    d.className = "row " + (l.new ? "done" : todo(l) ? "todo" : ""); d.id = "r" + i;
+    d.className = "row " + (l.new ? "done" : l.skip ? "skip" : todo(l) ? "todo" : ""); d.id = "r" + i;
     d.innerHTML = `<span class="k"></span><span class="s"></span><span></span><span></span><span></span>`;
     const c = d.children; c[0].textContent = l.key; c[1].textContent = l.spk || ""; c[2].textContent = l.jp || "";
-    c[3].textContent = l.old || ""; c[4].textContent = l.new || "";
+    c[3].textContent = l.old || ""; c[4].textContent = l.new || (l.skip ? "— пропущено нарочно (запретная тема)" : "");
     d.onclick = () => pick(i); box.appendChild(d);
   }
   const left = data.lines.filter(todo).length, mine = data.lines.filter(l => l.new).length;
