@@ -393,7 +393,11 @@ async function flush() {                // отправляет накоплен
         const by = new Map(d.lines.map(l => [l.key, l]));
         for (const [k, v] of Object.entries(edits)) { const l = by.get(k); if (l) l.new = v; }   // только поле new
         const r = await ghWrite(path, d, sha, "Перевод: " + path.split("/").pop().replace(/\.json$/, ""));
-        if (r.ok) { done = true; if (pending[path] === edits) delete pending[path]; }
+        if (r.ok) {
+          done = true; if (pending[path] === edits) delete pending[path];
+          const f = path.split("/").pop().replace(/\.json$/, "");
+          if (path === dataPath(f)) { tabStats.left[f] = d.lines.filter(l => todo(l, d)).length; tabStats.total[f] = d.lines.length; saveStatsSoon(); }
+        }
         else if (r.status !== 409 && r.status !== 422) throw new Error("GitHub ответил " + r.status);
       }
       if (!done) throw new Error("не удалось записать " + path);
@@ -402,6 +406,20 @@ async function flush() {                // отправляет накоплен
   } catch (e) { setGit("Ошибка отправки: " + e.message + " (правки не потеряны, повторю)"); flushTimer = setTimeout(flush, 15000); }
   flushing = false;
 }
+let statsTimer = null;
+function saveStatsSoon() { if (GIT) { clearTimeout(statsTimer); statsTimer = setTimeout(saveStats, 3000); } }
+async function saveStats() {            // счётчики глав (серая/чёрная в списке) — по живым данным, иначе висят старые из выгрузки
+  if (!GIT || !tab || !TOKEN) return;
+  const path = "stats/" + tab + ".json";
+  for (let n = 0; n < 3; n++) {
+    let sha = null, cur = {}; try { const r = await ghRead(path); sha = r.sha; cur = r.data; } catch (e) {}
+    const st = {left: {...(cur.left || {}), ...tabStats.left}, total: {...(cur.total || {}), ...tabStats.total}};
+    if (JSON.stringify(st) === JSON.stringify({left: cur.left || {}, total: cur.total || {}})) return;
+    const r = await ghWrite(path, st, sha, "Счётчики глав: " + tab);
+    if (r.ok || (r.status !== 409 && r.status !== 422)) return;
+  }
+}
+function paintFiles() { for (const el of $("files").children) if (el.dataset.f) el.classList.toggle("ok", tabStats.left[el.dataset.f] === 0); }
 window.addEventListener("beforeunload", e => { if (Object.keys(pending).length) { e.preventDefault(); e.returnValue = ""; } });
 async function syncNow() {
   if (GIT) return flush();
@@ -436,6 +454,12 @@ function mergeLocal(d, inc) {           // те же правила, что на
   }
   return st;
 }
+function chapterName(n, names) {       // имя главы из ответа ИИ -> настоящее; ИИ путает номер и теряет префикс «cs»
+  if (names.has(n + ".json")) return n;
+  const core = s => s.replace(/\.json$/, "").replace(/^\d+_/, "").replace(/^cs/, "");
+  const hit = [...names].filter(x => x.endsWith(".json") && core(x) === core(n));
+  return hit.length === 1 ? hit[0].slice(0, -5) : null;
+}
 async function gitUpload(f) {
   await flush();
   const buf = await f.arrayBuffer(), parts = [];
@@ -450,8 +474,9 @@ async function gitUpload(f) {
   // части, у которых имя не совпало с главой (один .json, чужое имя в ZIP), раскладываем по главам по ключам строк
   for (const [n, c] of parts.splice(0)) {   // {"глава": {key: перевод}, …} — раскладываем по главам по именам
     const ks = c && typeof c === "object" && !Array.isArray(c) ? Object.keys(c) : [];
-    if (!n && ks.length && ks.every(k => names.has(k + ".json") && c[k] && typeof c[k] === "object")) for (const k of ks) parts.push([k, c[k]]);
-    else parts.push([n, c]);
+    if (!n && ks.length && ks.every(k => c[k] && typeof c[k] === "object" && !Array.isArray(c[k])))
+      for (const k of ks) { const real = chapterName(k, names); if (real) parts.push([real, c[k]]); else skipped.push(k + " (нет такой главы)"); }
+    else parts.push([n && !names.has(n + ".json") ? (chapterName(n, names) || n) : n, c]);
   }
   const routed = parts.filter(([n]) => !names.has(n + ".json")), named = parts.filter(([n]) => names.has(n + ".json")), by = {};
   if (routed.length) {
@@ -477,17 +502,21 @@ async function gitUpload(f) {
     }
   }
   for (const [name, content] of [...named, ...Object.entries(by)]) {
-    const {data: d, sha} = await get(name), before = JSON.parse(JSON.stringify(d));
-    const st = mergeLocal(d, content && Array.isArray(content.lines) ? content.lines : content);
-    if (st.set) {                       // копия до загрузки лежит в репозитории рядом
-      const ts = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
-      await ghWrite(`backup/history/${tab}__${name}/${ts}.json`, before, null, "Бэкап перед загрузкой: " + name);
-      const r = await ghWrite(dataPath(name), d, sha, "Загрузка перевода: " + name);
-      if (!r.ok) return {ok: false, error: `GitHub ответил ${r.status} на ${name}`};
-      delete cache[name];               // sha изменился: если в эту главу придёт ещё часть, прочитаем заново
-    }
-    files.push({...st, file: name}); for (const k in total) total[k] += st[k];
+    try {                               // одна сломанная глава не останавливает остальные
+      const {data: d, sha} = await get(name), before = JSON.parse(JSON.stringify(d));
+      const st = mergeLocal(d, content && Array.isArray(content.lines) ? content.lines : content);
+      if (st.set) {                     // копия до загрузки лежит в репозитории рядом
+        const ts = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
+        await ghWrite(`backup/history/${tab}__${name}/${ts}.json`, before, null, "Бэкап перед загрузкой: " + name);
+        const r = await ghWrite(dataPath(name), d, sha, "Загрузка перевода: " + name);
+        if (!r.ok) { skipped.push(`${name} (GitHub ответил ${r.status})`); continue; }
+        delete cache[name];             // sha изменился: если в эту главу придёт ещё часть, прочитаем заново
+      }
+      tabStats.left[name] = d.lines.filter(l => todo(l, d)).length; tabStats.total[name] = d.lines.length;
+      files.push({...st, file: name}); for (const k in total) total[k] += st[k];
+    } catch (e) { skipped.push(`${name} (${e.message || e})`); }
   }
+  paintFiles(); updAll(); await saveStats();
   return {ok: true, total, files, skipped};
 }
 async function doExport() {
@@ -599,7 +628,11 @@ async function doUpload() {
 function markFile() {                  // открытая глава: серая, если в ней не осталось строк без перевода
   const el = [...$("files").children].find(x => x.dataset.f === file);
   if (el && data) el.classList.toggle("ok", !data.lines.some(todo));
-  if (data && file) { tabStats.left[file] = data.lines.filter(todo).length; tabStats.total[file] = data.lines.length; updAll(); }
+  if (data && file) {
+    const left = data.lines.filter(todo).length, was = tabStats.left[file];
+    tabStats.left[file] = left; tabStats.total[file] = data.lines.length; updAll();
+    if (was !== left && !pending[dataPath(file)]) saveStatsSoon();   // счётчик в репозитории устарел (правки сохранит flush)
+  }
 }
 // ---- общий прогресс вкладки: по счётчикам глав (stats), открытая глава — по живым данным ----
 let tabStats = {left: {}, total: {}}, showAll = false;
@@ -623,6 +656,7 @@ async function openAll(el) {
   allData = [];
   for (const f of fs) { try { allData.push({file: f, doc: await loadData(f)}); } catch (e) {} }
   for (const {file: f, doc} of allData) { tabStats.left[f] = doc.lines.filter(l => todo(l, doc)).length; tabStats.total[f] = doc.lines.length; }
+  paintFiles(); saveStatsSoon();
   updAll();                             // счётчики могли устареть (допереводили после выгрузки) — по живым данным
   if (showAll) renderAll();
 }
