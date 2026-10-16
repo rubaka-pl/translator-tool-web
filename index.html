@@ -47,6 +47,16 @@
   .row { display:grid; grid-template-columns:64px 80px 1fr 1fr 1fr; gap:8px; padding:8px 12px; margin:4px 2px; border-radius:14px; cursor:pointer; font-size:13px; transition:transform .12s, box-shadow .12s; }
   .row:hover { transform:scale(1.005); box-shadow:0 2px 10px #ff6fae22; }
   .row.todo { background:var(--todo); } .row.done { background:var(--done); }
+  .row.review { background:#ffc93c55 !important; } .row.review .k::after { content:" ⚠" !important; color:#d35400 !important; }
+  .modal { position:fixed; inset:0; background:#000a; z-index:60; display:flex; align-items:center; justify-content:center; }
+  .mbox { background:var(--bg1); color:var(--ink); width:min(1150px,95vw); max-height:90vh; display:flex; flex-direction:column; padding:14px 16px; border-radius:12px; border:1px solid var(--line); box-shadow:0 10px 40px #0006; }
+  .mbox h2 { margin:0 0 6px; font-size:17px; } .msum { white-space:pre-wrap; font-size:13px; margin:0; }
+  .mlist { overflow:auto; flex:1; margin:10px 0; border:1px solid var(--line); border-radius:6px; }
+  .mrow { display:grid; grid-template-columns:170px 1fr 1.3fr 150px; gap:8px; padding:5px 8px; border-bottom:1px solid var(--line); font-size:12px; white-space:pre-wrap; word-break:break-word; }
+  .mrow.bad { background:#ffc93c40; } .mrow span:last-child { color:#c0392b; font-weight:700; } .mrow.head { font-weight:700; color:var(--mute); position:sticky; top:0; background:var(--bg1); }
+  .mbtn { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+  .rev { border-bottom:1px solid var(--line); padding:8px; font-size:13px; } .rev .rd { white-space:pre-wrap; font-size:12px; color:var(--mute); margin-top:6px; max-height:260px; overflow:auto; }
+  .rstep { margin:6px 0 0; padding-top:6px; border-top:1px dashed var(--line); font-size:12px; } .rstep .why { font-size:11px; color:var(--mute); margin:2px 0 4px; } .rstep button { width:100%; }
   .row.done .k::after { content:" ✓"; color:var(--doneInk); font-weight:800; }
   .row.on { outline:2px solid var(--acc); outline-offset:-2px; box-shadow:0 0 0 4px #ff6fae33; }
   .row.head { position:sticky; top:-6px; z-index:2; cursor:default; margin-top:0; font-size:12px; font-weight:800; color:#fff; text-transform:uppercase; letter-spacing:.4px;
@@ -302,6 +312,9 @@
   <input id="impName" placeholder="имя вкладки (необязательно)" style="width:100%;padding:4px 6px;margin-top:4px">
   <button id="impGo" style="margin-top:4px;width:100%" onclick="doImport()">Свершить ритуал извлечения</button>
   <pre id="impLog" style="white-space:pre-wrap;font-size:11px;color:#555;max-height:120px;overflow:auto;margin:4px 0 0"></pre></div></details>
+  <details id="ritual" style="margin:8px 12px 0"><summary style="cursor:pointer;font-weight:600">🧭 Ритуал: промпты для Claude</summary>
+  <div style="font-size:11px;color:var(--mute);margin-top:4px">Перевод новой игры идёт по шагам, по порядку. Кнопка копирует готовый промпт для Claude Code с именем этой вкладки и путями; вставь его в Claude, открытый в папке проекта.</div>
+  <div id="ritualSteps"></div></details>
   <div id="gitbox" style="margin:8px 12px 0">
     <div id="tokrow" style="display:none"><input id="tok" type="password" placeholder="токен GitHub (один раз, хранится только в этом браузере)" style="width:100%;padding:4px 6px"><button style="width:100%;margin-top:4px" onclick="setToken()">Войти</button></div>
     <button id="syncBtn" style="width:100%" onclick="syncNow()">Синхронизировать с GitHub</button>
@@ -327,13 +340,14 @@
 <div id="main">
   <div id="top">
     <label><input type="checkbox" id="onlyTodo" checked> только без перевода</label>
+    <label title="строки, которые загрузка пометила как подозрительные: проверь и сохрани вручную"><input type="checkbox" id="onlyReview"> только ⚠</label>
     <input id="q" placeholder="поиск…" style="padding:4px 6px">
     <span id="st"></span>
     <div id="bar" title="сколько переведено в главе"><i></i></div>
     <select id="theme" title="тема" onchange="setTheme(this.value)"></select>
   </div>
   <div id="list"></div>
-  <div id="mid"><button id="copyView" onclick="copyView()">Промпт + всё на экране</button> <button id="copy10" class="copyN" onclick="copyN(10, this)">Промпт + 10 строк</button> <button class="copyN" onclick="copyN(30, this)">+ 30</button> <button class="copyN" onclick="copyN(50, this)">+ 50</button> <button class="copyN" onclick="copyN(100, this)">+ 100</button> <button id="copyTodo" onclick="copyTodo()">Промпт + все непереведённые</button> <button id="oldAll" onclick="oldToNewAll()" title="во все пустые строки главы подставить старый перевод">Старый → мой (вся глава)</button></div>
+  <div id="mid"><button id="copyView" onclick="copyView()">Промпт + всё на экране</button> <button id="copy10" class="copyN" onclick="copyN(10, this)">Промпт + 10 строк</button> <button class="copyN" onclick="copyN(30, this)">+ 30</button> <button class="copyN" onclick="copyN(50, this)">+ 50</button> <button class="copyN" onclick="copyN(100, this)">+ 100</button> <button id="copyTodo" onclick="copyTodo()">Промпт + все непереведённые</button> <button id="oldAll" onclick="oldToNewAll()" title="во все пустые строки главы подставить старый перевод">Старый → мой (вся глава)</button> <button id="revBtn" onclick="showRevisions()" title="последние 10 состояний главы: посмотреть разницу и откатить">🕓 Ревизии главы</button></div>
   <div id="ed">
     <div class="src"><b>№ / кто</b><span id="eKey"></span></div>
     <div class="src"><b>Японский</b><span id="eJp"></span> <button onclick="cp('jp')">копировать</button></div>
@@ -357,6 +371,7 @@ const GIT = location.hostname.endsWith(".github.io");
 const DATA_REPO = "rubaka-pl/translator-tool", BRANCH = "master";
 let TOKEN = ""; try { TOKEN = localStorage.ghToken || ""; } catch (e) {}
 const pending = {};                    // путь файла -> {ключ: перевод}, ещё не отправленные в репозиторий
+const lastRev = {};                    // путь файла -> когда последний раз сохраняли ревизию перед ручными правками
 let flushTimer = null, flushing = false;
 const enc = p => p.split("/").map(encodeURIComponent).join("/");
 const setGit = t => { $("gitst").textContent = t; };
@@ -390,8 +405,12 @@ async function flush() {                // отправляет накоплен
       setGit("Отправляю: " + path.split("/").pop());
       for (let n = 0; n < 3 && !done; n++) {        // 409/422 — файл успел измениться, читаем заново и повторяем
         const {data: d, sha} = await ghRead(path);
+        const f0 = path.split("/").pop().replace(/\.json$/, "");
+        if (path === dataPath(f0) && Date.now() - (lastRev[path] || 0) > 600000) {   // ревизия перед ручными правками, не чаще раза в 10 минут
+          lastRev[path] = Date.now(); await saveRevision(f0, JSON.parse(JSON.stringify(d)), "перед правками вручную");
+        }
         const by = new Map(d.lines.map(l => [l.key, l]));
-        for (const [k, v] of Object.entries(edits)) { const l = by.get(k); if (l) l.new = v; }   // только поле new
+        for (const [k, v] of Object.entries(edits)) { const l = by.get(k); if (l) { l.new = v; delete l.review; } }   // только new (+ снять ⚠)
         const r = await ghWrite(path, d, sha, "Перевод: " + path.split("/").pop().replace(/\.json$/, ""));
         if (r.ok) {
           done = true; if (pending[path] === edits) delete pending[path];
@@ -447,6 +466,7 @@ function mergeLocal(d, inc) {           // те же правила, что на
     if (!it || it.key === undefined) continue;
     const l = by.get(String(it.key)), v = it.new;
     if (!l) st.unknown++;
+    else if (l.skip) st.kept++;           // «пропущено нарочно» загрузка не заполняет
     else if (typeof v !== "string" || !v.trim()) st.empty++;
     else if ((l.new || "") === v.trim().slice(0, 5000)) st.same++;
     else if (l.new && !badNew(l)) st.kept++;
@@ -702,7 +722,8 @@ function render() {
   const q = $("q").value.toLowerCase();
   view = data.lines.map((l, i) => i).filter(i => {
     const l = data.lines[i];
-    if ($("onlyTodo").checked && !todo(l)) return false;
+    if ($("onlyReview").checked) { if (!l.review) return false; }
+    else if ($("onlyTodo").checked && !todo(l)) return false;
     return !q || [l.key, l.spk, l.jp, l.old, l.new].join(" ").toLowerCase().includes(q);
   });
   const box = $("list"); box.innerHTML = "";
@@ -713,28 +734,30 @@ function render() {
   if (ex.length) $("jsonHint").textContent = "{\n" + ex.map(k => `  "${k}": "перевод строки ${k}"`).join(",\n") + "\n}";
   for (const i of view) {
     const l = data.lines[i], d = document.createElement("div");
-    d.className = "row " + (l.new && !badNew(l) ? "done" : l.skip ? "skip" : todo(l) ? "todo" : ""); d.id = "r" + i;
+    d.className = "row " + (l.review && l.new ? "review" : l.new && !badNew(l) ? "done" : l.skip ? "skip" : todo(l) ? "todo" : ""); d.id = "r" + i;
+    if (l.review) d.title = "⚠ " + l.review;
     d.innerHTML = `<span class="k"></span><span class="s"></span><span></span><span></span><span></span>`;
     const c = d.children; c[0].textContent = l.key; c[1].textContent = l.spk || ""; c[2].textContent = l.jp || "";
     c[3].textContent = l.old || ""; c[4].textContent = l.new || (l.skip ? "— пропущено нарочно (запретная тема)" : "");
     d.onclick = () => pick(i); box.appendChild(d);
   }
   const left = data.lines.filter(todo).length, mine = data.lines.filter(l => l.new).length;
-  $("st").textContent = `строк ${data.lines.length} · моих ${mine} · без перевода ${left}`;
+  const rv = data.lines.filter(l => l.review && l.new).length;
+  $("st").textContent = `строк ${data.lines.length} · моих ${mine} · без перевода ${left}` + (rv ? ` · ⚠ проверить ${rv}` : "");
   markFile();
 }
 function pick(i) {
   document.querySelectorAll(".row.on").forEach(x => x.classList.remove("on"));
   cur = i; if (i < 0 || !data) return;
   const l = data.lines[i];
-  $("eKey").textContent = l.key + "  " + (l.spk || ""); $("eJp").textContent = l.jp || ""; $("eOld").textContent = l.old || "";
+  $("eKey").textContent = l.key + "  " + (l.spk || "") + (l.review && l.new ? "   ⚠ " + l.review + " (проверь и сохрани)" : ""); $("eJp").textContent = l.jp || ""; $("eOld").textContent = l.old || "";
   $("eNew").value = l.new || ""; $("eNew").focus();
   const r = $("r" + i); if (r) { r.classList.add("on"); r.scrollIntoView({block: "nearest"}); }
 }
 async function save(next) {
   if (cur < 0) return;
   const i = cur, v = $("eNew").value.trim();
-  data.lines[i].new = v;
+  data.lines[i].new = v; delete data.lines[i].review;   // сохранил руками — значит, проверено
   if (GIT) {                            // копим правки и отправляем в репозиторий через 10 секунд после последней
     (pending[dataPath(file)] ||= {})[data.lines[i].key] = v;
     clearTimeout(flushTimer); flushTimer = setTimeout(flush, 10000);
@@ -992,6 +1015,282 @@ function setTheme(t) {
 }
 function toggleTheme() { setTheme(THEMES[(THEMES.indexOf(curTheme()) + 1) % THEMES.length]); }
 try { setTheme(localStorage.theme && THEMES.includes(localStorage.theme) ? localStorage.theme : curTheme()); } catch (e) { setTheme(curTheme()); }
+</script>
+<script>
+// ===== загрузка ответа ИИ с проверкой: разбор -> план (что изменится) -> окно подтверждения -> запись =====
+const JPX = /[\u3040-\u30ff\u3400-\u9fff]/;
+function suspicious(jp, v) {            // почему строку стоит проверить глазами; пусто — всё в порядке
+  const r = [], j = (jp || "").replace(/\s/g, ""), n = v.replace(/\s/g, "");
+  if (JPX.test(v)) r.push("японские знаки");
+  if (/—|--/.test(v)) r.push("тире «—»");
+  if (/……/.test(v)) r.push("«……»");
+  if (j.length >= 6 && n.length < j.length * 0.8) r.push("короче оригинала");
+  if (j.length >= 6 && n.length > j.length * 6) r.push("длиннее оригинала");
+  const bal = (s, a, b) => s.split(a).length - s.split(b).length;
+  if (bal(jp || "", "「", "」") !== bal(v, "«", "»")) r.push("кавычки не сходятся");
+  return r;
+}
+function modal(title) {
+  const m = document.createElement("div"); m.className = "modal";
+  m.innerHTML = `<div class="mbox"><h2></h2><p class="msum"></p><div class="mlist"></div><div class="mbtn"></div></div>`;
+  m.querySelector("h2").textContent = title; document.body.appendChild(m);
+  return m;
+}
+async function readParts() {            // [[имя главы или "", содержимое]]
+  const f0 = $("upFile").files[0], txt = $("upText").value.trim();
+  if (txt) return [["", parseLoose(txt)]];
+  if (!f0) return null;
+  if (/\.zip$/i.test(f0.name)) {
+    const z = await JSZip.loadAsync(await f0.arrayBuffer()), parts = [];
+    for (const n of Object.keys(z.files)) if (n.endsWith(".json") && !z.files[n].dir) parts.push([n.split("/").pop().slice(0, -5), parseLoose(await z.files[n].async("string"))]);
+    return parts;
+  }
+  return [["", parseLoose(await f0.text())]];
+}
+async function chapterNames() {
+  if (GIT) return new Set((await ghList("imports/" + tab)).map(x => x.name).filter(n => n.endsWith(".json")));
+  return new Set((await (await fetch("/api/files?tab=" + encodeURIComponent(tab))).json()).files.map(f => f + ".json"));
+}
+async function readChapter(name) {
+  if (GIT) return ghRead(dataPath(name));
+  return {data: await (await fetch("/api/file/" + encodeURIComponent(name) + "?tab=" + encodeURIComponent(tab))).json(), sha: null};
+}
+async function buildPlan(parts) {       // ничего не пишет: только считает, что изменится
+  if (GIT) await flush();
+  const names = await chapterNames(), skipped = [], cache = {}, cnt = {unknown: 0, kept: 0, same: 0, empty: 0};
+  const get = async n => cache[n] ||= await readChapter(n);
+  const toList = c => { let inc = c && Array.isArray(c.lines) ? c.lines : c;
+    if (inc && !Array.isArray(inc) && typeof inc === "object") inc = Object.entries(inc).map(([key, v]) => ({key, new: v}));
+    return Array.isArray(inc) ? inc : null; };
+  const by = {}, routed = [];
+  for (const [n, c] of parts) {
+    const ks = c && typeof c === "object" && !Array.isArray(c) ? Object.keys(c) : [];
+    const pieces = !n && ks.length && ks.every(k => c[k] && typeof c[k] === "object" && !Array.isArray(c[k]))
+      ? ks.map(k => { const real = chapterName(k, names); if (!real) skipped.push(k + " (нет такой главы)"); return [real, c[k]]; }).filter(p => p[0])
+      : [[n ? chapterName(n, names) || "" : "", c]];
+    for (const [name, content] of pieces) {
+      const inc = toList(content); if (!inc) { skipped.push((name || "ответ") + " (не тот формат)"); continue; }
+      if (name) (by[name] ||= []).push(...inc); else routed.push(...inc);
+    }
+  }
+  if (routed.length) {                  // плоский {key: перевод}: главу ищем по ключу, сначала в открытой
+    const idx = new Map();
+    const add = async n => { for (const l of (await get(n)).data.lines) { const k = String(l.key); (idx.get(k) || idx.set(k, []).get(k)).push(n); } };
+    if (file && names.has(file + ".json")) await add(file);
+    if (routed.some(it => it && it.key !== undefined && !idx.has(String(it.key))))
+      for (const x of names) { const n = x.slice(0, -5); if (n !== file) await add(n); }
+    for (const it of routed) {
+      if (!it || it.key === undefined) continue;
+      const fs = idx.get(String(it.key)); if (!fs) { cnt.unknown++; continue; }
+      (by[fs.includes(file) ? file : fs[0]] ||= []).push(it);
+    }
+  }
+  const chapters = [];
+  for (const [name, inc] of Object.entries(by)) {
+    try {
+      const {data: d, sha} = await get(name), map = new Map(d.lines.map(l => [String(l.key), l])), changes = [], seen = new Set();
+      for (const it of inc) {
+        if (!it || it.key === undefined) continue;
+        const k = String(it.key), l = map.get(k), v = typeof it.new === "string" ? it.new.trim().slice(0, 5000) : "";
+        if (!l) { cnt.unknown++; continue; }
+        if (!v) { cnt.empty++; continue; }
+        if ((l.new || "") === v) { cnt.same++; continue; }
+        if (l.skip || (l.new && !badNew(l))) { cnt.kept++; continue; }   // готовое и «пропущено нарочно» — только руками
+        if (seen.has(k)) continue; seen.add(k);
+        changes.push({key: k, jp: l.jp || "", was: l.new || "", now: v, flags: suspicious(l.jp, v)});
+      }
+      if (changes.length) chapters.push({name, sha, data: d, changes});
+    } catch (e) { skipped.push(`${name} (${e.message || e})`); }
+  }
+  return {chapters, skipped, cnt};
+}
+function showPlan(plan) {               // окно: что запишется; подозрительные сверху
+  return new Promise(res => {
+    const all = plan.chapters.flatMap(c => c.changes.map(x => ({...x, ch: c.name}))), bad = all.filter(x => x.flags.length);
+    const m = modal("Проверь перед записью");
+    m.querySelector(".msum").textContent =
+      `Запишется строк: ${all.length} (глав: ${plan.chapters.length}). Подозрительных: ${bad.length}.\n` +
+      (bad.length ? "Подозрительные запишутся с пометкой ⚠ (жёлтые, не зелёные): найдёшь их галочкой «только ⚠» и проверишь руками.\n" : "") +
+      `Уже переведённые строки не меняются (не тронуто: ${plan.cnt.kept}).` + (plan.cnt.unknown ? ` Чужих ключей: ${plan.cnt.unknown}.` : "") +
+      (plan.skipped.length ? `\nПропущено: ${plan.skipped.join(", ")}` : "");
+    const list = m.querySelector(".mlist");
+    list.innerHTML = `<div class="mrow head"><span>Глава · ключ</span><span>Японский</span><span>Перевод</span><span>Что не так</span></div>`;
+    const rows = [...bad, ...all.filter(x => !x.flags.length)];
+    for (const x of rows.slice(0, 1500)) {
+      const r = document.createElement("div"); r.className = "mrow" + (x.flags.length ? " bad" : "");
+      r.innerHTML = "<span></span><span></span><span></span><span></span>";
+      r.children[0].textContent = x.ch.replace(/^\d+_/, "") + " · " + x.key; r.children[1].textContent = x.jp;
+      r.children[2].textContent = (x.was ? "было: " + x.was + "\n→ " : "") + x.now; r.children[3].textContent = x.flags.join(", ");
+      list.appendChild(r);
+    }
+    if (rows.length > 1500) list.insertAdjacentHTML("beforeend", `<div class="mrow"><span>… и ещё ${rows.length - 1500}</span></div>`);
+    const btns = [["all", bad.length ? "Записать всё (⚠ с пометкой)" : "Записать"], ...(bad.length && bad.length < all.length ? [["ok", "Записать только без ⚠"]] : []), ["no", "Отмена"]];
+    for (const [a, t] of btns) { const b = document.createElement("button"); b.textContent = t; b.onclick = () => { m.remove(); res(a); }; m.querySelector(".mbtn").appendChild(b); }
+    m.onclick = e => { if (e.target === m) { m.remove(); res("no"); } };
+  });
+}
+async function applyPlan(plan, mode) {
+  const out = {set: 0, review: 0, files: [], skipped: [...plan.skipped]};
+  for (const c of plan.chapters) {
+    const ch = c.changes.filter(x => mode === "all" || !x.flags.length); if (!ch.length) continue;
+    try {
+      let n = 0, rv = 0;
+      if (GIT) {
+        for (let t = 0; ; t++) {          // 409 — глава успела измениться: читаем заново
+          const {data: d, sha} = t ? await ghRead(dataPath(c.name)) : {data: c.data, sha: c.sha};
+          const before = JSON.parse(JSON.stringify(d)), map = new Map(d.lines.map(l => [String(l.key), l]));
+          n = rv = 0;
+          for (const x of ch) {
+            const l = map.get(x.key); if (!l || l.skip || (l.new && !badNew(l))) continue;
+            l.new = x.now; if (x.flags.length) { l.review = x.flags.join(", "); rv++; } else delete l.review; n++;
+          }
+          if (!n) break;
+          if (!t) await saveRevision(c.name, before, "перед загрузкой");
+          const r = await ghWrite(dataPath(c.name), d, sha, "Загрузка перевода: " + c.name);
+          if (r.ok) { tabStats.left[c.name] = d.lines.filter(l => todo(l, d)).length; tabStats.total[c.name] = d.lines.length; break; }
+          if ((r.status !== 409 && r.status !== 422) || t >= 2) throw new Error("GitHub ответил " + r.status);
+        }
+      } else {
+        const body = {[c.name]: {lines: ch.map(x => ({key: x.key, new: x.now, review: x.flags.join(", ")}))}};
+        const r = await (await fetch("/api/upload?tab=" + encodeURIComponent(tab), {method: "POST", body: JSON.stringify(body)})).json();
+        if (!r.ok) throw new Error(r.error);
+        n = r.total.set; rv = ch.filter(x => x.flags.length).length;
+      }
+      out.set += n; out.review += rv; out.files.push(`${c.name}: +${n}` + (rv ? ` (⚠ ${rv})` : ""));
+    } catch (e) { out.skipped.push(`${c.name} (${e.message || e})`); }
+  }
+  paintFiles(); updAll(); if (GIT) await saveStats();
+  return out;
+}
+doUpload = async () => {
+  const b = $("upGo"); b.disabled = true;
+  try {
+    $("upLog").textContent = "Разбираю ответ…";
+    const parts = await readParts();
+    if (!parts) { $("upLog").textContent = "Вставь сырой JSON или выбери файл"; return; }
+    $("upLog").textContent = "Сверяю с главами (ничего не пишу)…";
+    const plan = await buildPlan(parts);
+    if (!plan.chapters.length) {
+      $("upLog").textContent = `Записывать нечего. Уже переведённых не тронуто: ${plan.cnt.kept} · такие же ${plan.cnt.same} · пустых ${plan.cnt.empty} · чужих ключей ${plan.cnt.unknown}` + (plan.skipped.length ? "\nпропущено: " + plan.skipped.join(", ") : "");
+      return;
+    }
+    const a = await showPlan(plan);
+    if (a === "no") { $("upLog").textContent = "Отменено, ничего не записано."; return; }
+    $("upLog").textContent = "Записываю…";
+    const r = await applyPlan(plan, a);
+    $("upText").value = ""; $("upFile").value = "";
+    $("upLog").textContent = `записано ${r.set} · с пометкой ⚠ ${r.review} · уже переведённых не тронуто ${plan.cnt.kept} · чужих ключей ${plan.cnt.unknown}` +
+      (r.skipped.length ? "\nпропущено: " + r.skipped.join(", ") : "") + "\n" + r.files.join("\n");
+    if (typeof toast === "function") toast(`записано ${r.set} строк` + (r.review ? `, ⚠ ${r.review}` : ""));
+    if (file) { data = await loadData(file); render(); pick(view[0] ?? -1); }
+  } catch (e) { $("upLog").textContent = "Ошибка: " + (e.message || e); }
+  finally { b.disabled = false; }
+};
+
+// ===== ревизии главы: до 10 последних состояний, разница и откат =====
+const REV_MAX = 10, revDir = name => `backup/history/${tab}__${name}`;
+async function saveRevision(name, doc, why) {   // на сайте; локально ревизии делает сервер
+  if (!GIT) return;
+  try {
+    const ts = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
+    await ghWrite(`${revDir(name)}/${ts}.json`, {...doc, _why: why}, null, "Ревизия: " + name);
+    const list = (await ghList(revDir(name))).filter(x => x.name.endsWith(".json")).sort((a, b) => a.name < b.name ? -1 : 1);
+    for (const x of list.slice(0, Math.max(0, list.length - REV_MAX)))
+      await ghApi(x.path, {method: "DELETE", body: JSON.stringify({message: "Старая ревизия: " + name, sha: x.sha, branch: BRANCH})});
+  } catch (e) {}
+}
+async function listRevisions(name) {    // новые сверху: [{id, time, load}]
+  const when = id => { const s = id.replace(/\D/g, ""); return `${s.slice(6, 8)}.${s.slice(4, 6)}.${s.slice(0, 4)} ${s.slice(8, 10)}:${s.slice(10, 12)}:${s.slice(12, 14)}`; };
+  if (GIT) {
+    let list = []; try { list = (await ghList(revDir(name))).filter(x => x.name.endsWith(".json")); } catch (e) {}
+    return list.sort((a, b) => a.name < b.name ? 1 : -1).slice(0, REV_MAX).map(x => ({id: x.path, time: when(x.name), load: async () => (await ghRead(x.path)).data}));
+  }
+  const r = await (await fetch(`/api/revisions?tab=${encodeURIComponent(tab)}&file=${encodeURIComponent(name)}`)).json();
+  return (r.revs || []).map(id => ({id, time: when(id), load: async () => (await fetch(`/api/revision?tab=${encodeURIComponent(tab)}&file=${encodeURIComponent(name)}&id=${encodeURIComponent(id)}`)).json()}));
+}
+async function restoreRevision(name, rev, doc) {
+  if (GIT) {
+    await flush();
+    const {data: d, sha} = await ghRead(dataPath(name));
+    await saveRevision(name, JSON.parse(JSON.stringify(d)), "перед откатом");
+    const old = new Map(doc.lines.map(l => [String(l.key), l]));
+    for (const l of d.lines) { const o = old.get(String(l.key)); if (!o) continue; l.new = o.new || ""; if (o.review) l.review = o.review; else delete l.review; }
+    const r = await ghWrite(dataPath(name), d, sha, "Откат к ревизии: " + name);
+    if (!r.ok) throw new Error("GitHub ответил " + r.status);
+    tabStats.left[name] = d.lines.filter(l => todo(l, d)).length; tabStats.total[name] = d.lines.length; paintFiles(); updAll(); saveStatsSoon();
+  } else {
+    const r = await (await fetch(`/api/restore?tab=${encodeURIComponent(tab)}&file=${encodeURIComponent(name)}&id=${encodeURIComponent(rev.id)}`, {method: "POST", body: "{}"})).json();
+    if (!r.ok) throw new Error(r.error || "не вышло");
+  }
+}
+async function showRevisions() {
+  if (!file || !data) { if (typeof toast === "function") toast("сначала открой главу"); return; }
+  const name = file, m = modal("Ревизии главы " + name), box = m.querySelector(".mlist");
+  m.querySelector(".msum").textContent = "Последние 10 состояний главы: перед каждой загрузкой, перед откатом и раз в 10 минут ручной правки. «Вернуть» меняет только переводы (поле «мой перевод»); текущее состояние перед этим само сохранится ревизией.";
+  const close = document.createElement("button"); close.textContent = "Закрыть"; close.onclick = () => m.remove(); m.querySelector(".mbtn").appendChild(close);
+  m.onclick = e => { if (e.target === m) m.remove(); };
+  box.textContent = "Загружаю…";
+  const revs = await listRevisions(name);
+  box.textContent = revs.length ? "" : "Ревизий пока нет: они появятся после первой загрузки или правки.";
+  const cur = new Map(data.lines.map(l => [String(l.key), l]));
+  for (const rev of revs) {
+    const row = document.createElement("div"); row.className = "rev"; row.textContent = rev.time + " — загружаю…"; box.appendChild(row);
+    let doc; try { doc = await rev.load(); } catch (e) { row.textContent = rev.time + " — не прочиталась"; continue; }
+    const diff = doc.lines.filter(l => { const c = cur.get(String(l.key)); return c && (c.new || "") !== (l.new || ""); });
+    const done = doc.lines.filter(l => l.new).length;
+    row.innerHTML = "<b></b> <span></span> <button>Разница</button> <button>Вернуть</button><div class=\"rd\" style=\"display:none\"></div>";
+    row.children[0].textContent = rev.time; row.children[1].textContent = `· ${doc._why || "ревизия"} · переведено ${done} из ${doc.lines.length} · отличается от текущей: ${diff.length}`;
+    const rd = row.querySelector(".rd");
+    rd.textContent = diff.length ? diff.slice(0, 300).map(l => `${l.key}\n  сейчас: ${cur.get(String(l.key)).new || "(пусто)"}\n  было:   ${l.new || "(пусто)"}`).join("\n") : "Совпадает с текущей.";
+    row.children[2].onclick = () => { rd.style.display = rd.style.display === "none" ? "" : "none"; };
+    row.children[3].onclick = async () => {
+      if (!confirm(`Вернуть главу ${name} к состоянию от ${rev.time}? Изменится строк: ${diff.length}. Текущее состояние сохранится ревизией.`)) return;
+      try { await restoreRevision(name, rev, doc); m.remove(); if (file === name) { data = await loadData(name); render(); pick(view[0] ?? -1); } if (typeof toast === "function") toast("глава возвращена"); }
+      catch (e) { alert("Не вышло: " + (e.message || e)); }
+    };
+  }
+}
+$("onlyReview").onchange = () => { render(); pick(view[0] ?? -1); };
+
+// ===== Ритуал: промпты для Claude Code по шагам =====
+function ritualCtx() {
+  return `Проект: любительский перевод визуальной новеллы «${tab}» с японского на русский.\n` +
+    `Переводчик строк: G:\\work\\translator-tool (вкладка «${tab}», файлы imports/${tab}/*.json, формат {"lines":[{"key","spk","jp","old","new"}]}; сайт ${SITE}, данные в репозитории ${DATA_REPO}). Перевод человека — поле new.\n` +
+    `Порядок работы: G:\\work\\translator-tool\\Ритуал Извлечения\\README.md — прочитай целиком перед началом.\n` +
+    `Образцы готовых проектов: G:\\work\\zombie-ru (сборщик tools/build_all.py + «Собрать в игру.exe», правки tools/apply_fix.py) и G:\\work\\monobeno-ru («Собрать всё.bat»).\n` +
+    `Правило всего проекта: сексуальные сцены с несовершеннолетними или с персонажами в детском теле не переводим и в сборку не берём.\n\n`;
+}
+const RITUAL = [
+  {t: "Старт новой игры", why: "Один раз заводим отдельный репозиторий, правила и структуру. Без этого перевод, файлы игры и инструменты перемешаются, и потом никто не найдёт, что откуда и как собрать.",
+   p: () => `ЗАДАЧА: подготовить проект к переводу. Ничего не переводить.\n1. Если в сообщении нет папки с игрой — спроси. Определи движок и формат архивов.\n2. Создай репозиторий G:\\work\\<игра>-ru: jp/, tr/, review/, docs/, tools/; .gitignore для файлов игры (raw/, build/, backup-orig/, архивы игры).\n3. Скопируй оригинальные архивы игры в backup-orig/: сборка всегда идёт от них, а не от папки игры.\n4. CLAUDE.md: что за игра, где что лежит, как собрать, ссылка на Ритуал.\n5. Заготовки docs/STYLE.md, docs/GLOSSARY.md, docs/PIPELINE.md.\nВ конце коротко: движок, что нашёл, что дальше.`},
+  {t: "Извлечь ВЕСЬ текст", why: "Переводить можно только то, что достали целиком. Пропущенные строки движка и картинки с надписями потом всплывут в игре по-японски (так было с «to be continued» и титрами).",
+   p: () => `ЗАДАЧА: достать весь текст игры.\n1. Распакуй архивы в raw/ (GARbro или свой распаковщик в tools/).\n2. Найди весь текст: сценарий, строки движка (заголовок окна, ошибки, имя шрифта), меню и настройки, картинки с надписями (меню, «to be continued», титры, предупреждения), ролики.\n3. Сценарий -> jp/<глава>.json, ключ — номер строки исходника. Проверь, что число строк сходится с исходником и ни одна глава не потерялась.\n4. Список картинок с текстом (ui/spec.json или docs/).\n5. Собери пробный патч БЕЗ перевода и убедись, что игра запускается как оригинал: упаковщик не должен ломать архивы.\n6. Выгрузи строки во вкладку: tools/export_workbench.py -> G:\\work\\translator-tool\\imports\\${tab}\\NNN_<глава>.json.\nВ конце: сколько строк, глав, картинок; что не удалось достать.`},
+  {t: "Сборщик: одна кнопка «в игру»", why: "Переводят на сайте, а играют в игру. Сборщик одной кнопкой забирает переводы с сайта и кладёт готовый патч в игру — иначе правки так и висят в репозитории.",
+   p: () => `ЗАДАЧА: сделать сборщик (образец — G:\\work\\zombie-ru\\tools\\build_all.py, from_translator.py, launcher.cs).\n1. tools/from_translator.py: сначала git pull --rebase --autostash в G:\\work\\translator-tool (иначе правки с сайта не попадут), потом поле new из imports/${tab}/*.json -> tr/<глава>.json.\n2. tools/build_all.py — по шагам, каждый шаг печатает по-русски, что делает и зачем: (а) переводы с сайта; (б) строки движка (шрифт, заголовок, ошибки); (в) сценарий из backup-orig/ + tr/ (никогда не из папки игры), переносы по словам под ширину окна и шрифт; (г) картинки интерфейса, титры; (д) копия архивов в игру, если игра открыта — сказать закрыть. Ошибка — стоп и понятное сообщение.\n3. «Собрать в игру.exe» в корне: tools/launcher.cs запускает python tools/build_all.py и ждёт клавишу. Сборка: C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe /nologo /codepage:65001 "/out:Собрать в игру.exe" tools\\launcher.cs. Если делаешь .bat — в нём только ASCII, русский печатает Python (cmd ломается на русских строках в .bat).\n4. Прогони сборку и проверь, что файлы легли в игру.\n5. Допиши в CLAUDE.md, как собирать.`},
+  {t: "Перед переводом: стиль и глоссарий", why: "Чтобы все — ты, другие люди и ИИ — переводили одинаково: те же имена, обращения, время повествования. Иначе героиня в одной главе Мицуки, в другой Мидзуки.",
+   p: () => `ЗАДАЧА: подготовить правила перевода. Сам текст не переводить.\n1. Прочитай японский текст первых глав ЦЕЛИКОМ (jp/), не кусками.\n2. docs/STYLE.md: голос автора, лицо и время повествования, как говорят персонажи (кто с кем на «ты», кто на «вы», грубость, вежливость), что делать с ――, ……, звукоподражаниями.\n3. docs/GLOSSARY.md: имена (с чтением), прозвища, обращения (-сан, -тян), термины, места.\n4. Тот же глоссарий по строке «оригинал — перевод (примечание)» выдай мне текстом: я вставлю его в «Глоссарий вкладки» на сайте, он уходит во все промпты.`},
+  {t: "Перевод в браузере", why: "Переводит человек или ИИ через кнопки «Промпт + …» под списком строк. Ответ ИИ вставляешь в «Загрузить перевод»: сайт покажет, что изменится, подозрительное пометит ⚠, готовое не тронет."},
+  {t: "Редактура по японскому", why: "Гладкий русский может врать: перепутано, кто кого ударил, «ты» вместо «вы», не тот род. Видно только рядом с оригиналом.",
+   p: () => `ЗАДАЧА: редактура перевода по японскому, глава за главой.\n1. Сначала git pull в G:\\work\\translator-tool. Источник правды — поле new во вкладке «${tab}».\n2. Каждую главу читай японский и русский парами ЦЕЛИКОМ, не по 2–3 строки.\n3. Ищи: смысловые ошибки, пропуски и добавки, кто говорит и о ком, род/лицо/число, ты/вы, время, кальки, имена не по глоссарию, тире из японского ――.\n4. Правки пиши одновременно в tr/<глава>.json и в поле new вкладки (одним скриптом, как tools/apply_fix.py в zombie-ru), иначе следующая сборка вернёт старое. Потом закоммить и запушь translator-tool, чтобы правки увидел сайт.\n5. Не поднимай регистр, не дописывай от себя. Запретные сцены пропускай.\n6. После каждой главы — коротко: сколько правок и самые важные.`},
+  {t: "Читка русского без японского", why: "Калька, канцелярит и «расслабляет лицо» видны, только когда читаешь как обычную книгу, не глядя в оригинал.",
+   p: () => `ЗАДАЧА: читка русского текста подряд, без японского.\n1. git pull в G:\\work\\translator-tool. Читай поле new вкладки «${tab}» по порядку, главу целиком.\n2. Ищи: кривые обороты, кальку, канцелярит, повторы, несогласованность, орфографию и пунктуацию, ё, разнобой имён.\n3. Сомнительное место сверь с японским, прежде чем править.\n4. Правки — в tr/ и в new вкладки одновременно, потом коммит и пуш translator-tool. Запретные сцены пропускай.`},
+  {t: "Сборка и проверка в игре", why: "В игре вылезает то, чего не видно в файлах: перенос посреди слова, нечитаемый шрифт, японские картинки, титры, склеенные строки.",
+   p: () => `ЗАДАЧА: собрать и проверить.\n1. Запусти «Собрать в игру.exe» (или tools/build_all.py) и убедись, что все шаги прошли.\n2. Дай мне список, что проверить в игре: начало (переносы, шрифт), меню и настройки, сохранения, концовку и титры, все картинки с текстом.\n3. По моим скриншотам ищи причину и чини в сборщике, а не руками в файлах игры.\n4. Закоммить и запушь проект (файлы игры не коммитить).`},
+];
+function renderRitual() {
+  const box = $("ritualSteps"); box.innerHTML = "";
+  RITUAL.forEach((s, i) => {
+    const d = document.createElement("div"); d.className = "rstep";
+    d.innerHTML = "<b></b><div class=\"why\"></div>"; d.children[0].textContent = `${i + 1}. ${s.t}`; d.children[1].textContent = "Зачем: " + s.why;
+    if (s.p) {
+      const b = document.createElement("button"); b.textContent = "Скопировать промпт";
+      b.onclick = async () => { await copyText(ritualCtx() + s.p()); b.textContent = "Скопировано ✓"; setTimeout(() => b.textContent = "Скопировать промпт", 2000); if (typeof toast === "function") toast("промпт для Claude в буфере"); };
+      d.appendChild(b);
+    }
+    box.appendChild(d);
+  });
+}
+renderRitual();
 </script>
 </body>
 </html>
