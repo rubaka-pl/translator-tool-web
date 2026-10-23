@@ -358,7 +358,7 @@
   </div>
 </div>
 <script>
-const JP = /[぀-ヿ㐀-䶿一-鿿]/;
+const JP = /[぀-ヺー-ヿ㐀-䶿一-鿿]/;      // без «・» (U+30FB): им начинаются пункты списков и в переводе
 let tab = "", file = null, data = null, view = [], cur = -1;
 const $ = id => document.getElementById(id);
 // без перевода: пустой new; old не считается, если он чужой (foreign_old в файле главы) или японский; skip — пропущено нарочно
@@ -1023,7 +1023,7 @@ try { setTheme(localStorage.theme && THEMES.includes(localStorage.theme) ? local
 </script>
 <script>
 // ===== загрузка ответа ИИ с проверкой: разбор -> план (что изменится) -> окно подтверждения -> запись =====
-const JPX = /[\u3040-\u30ff\u3400-\u9fff]/, NOTLINE = "\u043d\u0435 \u0442\u0430 \u0441\u0442\u0440\u043e\u043a\u0430?";
+const JPX = /[\u3040-\u30fa\u30fc-\u30ff\u3400-\u9fff]/, NOTLINE = "\u043d\u0435 \u0442\u0430 \u0441\u0442\u0440\u043e\u043a\u0430?";
 function suspicious(jp, v) {            // почему строку стоит проверить глазами; пусто — всё в порядке
   const r = [], j = (jp || "").replace(/\s/g, ""), n = v.replace(/\s/g, "");
   if (JPX.test(v)) r.push("японские знаки");
