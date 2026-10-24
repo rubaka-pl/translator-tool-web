@@ -363,7 +363,7 @@ let tab = "", file = null, data = null, view = [], cur = -1;
 const $ = id => document.getElementById(id);
 // без перевода: пустой new; old не считается, если он чужой (foreign_old в файле главы) или японский; skip — пропущено нарочно
 // японские знаки в моём переводе — тоже не переведено (такую строку загрузка перезаписывает)
-const badNew = l => !!l.new && JP.test(l.new);
+const badNew = l => !!l.new && JP.test(l.new.replace(/\{[^{}]*\}/g, ""));   // {苗字}/{名前} — метки движка, их оставляют как есть
 const todo = (l, d = data) => !l.skip && (badNew(l) || (!l.new && (!!(d && d.foreign_old) || JP.test(l.old || "") || !(l.old || "").trim())));
 
 // ---- режим GitHub Pages: данные лежат в репозитории, читаем и пишем через API (нужен токен) ----
