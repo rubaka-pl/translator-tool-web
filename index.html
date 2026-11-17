@@ -360,6 +360,7 @@
 <script>
 const JP = /[぀-ヺー-ヿ㐀-䶿一-鿿]/;      // без «・» (U+30FB): им начинаются пункты списков и в переводе
 let tab = "", file = null, data = null, view = [], cur = -1;
+let SHOW_DONE = false; try { SHOW_DONE = !!localStorage.getItem("showDone"); } catch (e) {}
 const $ = id => document.getElementById(id);
 // без перевода: пустой new; old не считается, если он чужой (foreign_old в файле главы) или японский; skip — пропущено нарочно
 // японские знаки в моём переводе — тоже не переведено (такую строку загрузка перезаписывает)
@@ -448,11 +449,13 @@ async function syncNow() {
 }
 async function gitFiles() {
   if (!TOKEN) { showToken(); return {tabs: [], files: [], dir: ""}; }
-  const tabs = (await ghList("imports")).filter(x => x.type === "dir").map(x => x.name);
-  if (!tab) tab = tabs[0];
+  const all = (await ghList("imports")).filter(x => x.type === "dir").map(x => x.name);
+  let done = []; try { done = (await ghRead("hidden.json")).data || []; } catch (e) {}   // законченные игры — вкладки скрыты (данные на месте)
+  const hidden = all.filter(t => done.includes(t)), tabs = all.filter(t => SHOW_DONE || !done.includes(t));
+  if (!tab || !tabs.includes(tab)) tab = tabs[0];
   const files = (await ghList("imports/" + tab)).filter(x => x.name.endsWith(".json")).map(x => x.name.slice(0, -5));
   let st = {}; try { st = (await ghRead("stats/" + tab + ".json")).data; } catch (e) {}   // {left, total} по главам (пишет выгрузка)
-  return {tabs, files, left: st.left || st, total: st.total || {}, dir: DATA_REPO + "/imports/" + tab};
+  return {tabs, hidden, files, left: st.left || st, total: st.total || {}, dir: DATA_REPO + "/imports/" + tab};
 }
 async function loadData(f) {
   if (!GIT) return (await fetch("/api/file/" + encodeURIComponent(f) + "?tab=" + encodeURIComponent(tab))).json();
@@ -578,6 +581,12 @@ async function loadFiles() {
   if (r.tabs.length > 1) for (const t of r.tabs) {
     const b = document.createElement("button"); b.textContent = t;
     b.style.fontWeight = t === tab ? "700" : "400"; b.onclick = () => { tab = t; file = null; data = null; $("list").innerHTML = ""; loadFiles(); };
+    $("tabs").appendChild(b);
+  }
+  if (r.hidden && r.hidden.length) {    // законченные игры (hidden.json в репозитории данных) — по кнопке
+    const b = document.createElement("button"); b.textContent = SHOW_DONE ? "скрыть готовые ◂" : `готовые (${r.hidden.length}) ▸`;
+    b.style.opacity = ".6"; b.title = "Законченные переводы: " + r.hidden.join(", ");
+    b.onclick = () => { SHOW_DONE = !SHOW_DONE; try { localStorage.setItem("showDone", SHOW_DONE ? "1" : ""); } catch (e) {} loadFiles(); };
     $("tabs").appendChild(b);
   }
   $("dir").textContent = r.dir;
