@@ -360,7 +360,17 @@
 <script>
 const JP = /[぀-ヺー-ヿ㐀-䶿一-鿿]/;      // без «・» (U+30FB): им начинаются пункты списков и в переводе
 let tab = "", file = null, data = null, view = [], cur = -1;
-let SHOW_DONE = false; try { SHOW_DONE = !!localStorage.getItem("showDone"); } catch (e) {}
+// «готовые» закрыты паролем: в странице только его SHA-256, после верного ввода браузер помнит хэш
+const DONE_HASH = "7e2d086b869b235edbfd220d02236b33ccfded44e866716fceee3bd2a7a9314c";
+let DONE_OK = false; try { DONE_OK = localStorage.getItem("doneKey") === DONE_HASH; } catch (e) {}
+let SHOW_DONE = false; try { SHOW_DONE = DONE_OK && !!localStorage.getItem("showDone"); } catch (e) {}
+async function sha256(t) { return [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t)))].map(b => b.toString(16).padStart(2, "0")).join(""); }
+async function unlockDone() {
+  if (DONE_OK) return true;
+  const p = prompt("Пароль к готовым переводам"); if (p == null) return false;
+  if (await sha256(p) !== DONE_HASH) { alert("Неверный пароль"); return false; }
+  DONE_OK = true; try { localStorage.setItem("doneKey", DONE_HASH); } catch (e) {} return true;
+}
 const $ = id => document.getElementById(id);
 // без перевода: пустой new; old не считается, если он чужой (foreign_old в файле главы) или японский; skip — пропущено нарочно
 // японские знаки в моём переводе — тоже не переведено (такую строку загрузка перезаписывает)
@@ -585,8 +595,8 @@ async function loadFiles() {
   }
   if (r.hidden && r.hidden.length) {    // законченные игры (hidden.json в репозитории данных) — по кнопке
     const b = document.createElement("button"); b.textContent = SHOW_DONE ? "скрыть готовые ◂" : `готовые (${r.hidden.length}) ▸`;
-    b.style.opacity = ".6"; b.title = "Законченные переводы: " + r.hidden.join(", ");
-    b.onclick = () => { SHOW_DONE = !SHOW_DONE; try { localStorage.setItem("showDone", SHOW_DONE ? "1" : ""); } catch (e) {} loadFiles(); };
+    b.style.opacity = ".6"; b.title = DONE_OK ? "Законченные переводы: " + r.hidden.join(", ") : "Законченные переводы (по паролю)";
+    b.onclick = async () => { if (!SHOW_DONE && !await unlockDone()) return; SHOW_DONE = !SHOW_DONE; try { localStorage.setItem("showDone", SHOW_DONE ? "1" : ""); } catch (e) {} loadFiles(); };
     $("tabs").appendChild(b);
   }
   $("dir").textContent = r.dir;
