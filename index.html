@@ -342,7 +342,7 @@
   <button id="upGo" style="width:100%;margin-top:4px" onclick="doUpload()">Загрузить перевод</button>
   <div style="font-size:11px;color:#777;margin-top:4px">Вставь текст или выбери ZIP / .json / .txt (можно несколько, в том числе главы, скачанные кнопкой ⬇ у главы). Строки сами разложатся по главам по ключам, открывать главу не нужно. Заполненные (зелёные) строки не трогаются.</div>
   <pre id="upLog" style="white-space:pre-wrap;font-size:11px;color:#555;max-height:140px;overflow:auto;margin:4px 0 0"></pre></div></details>
-  <h1>Файлы</h1><div id="files"></div><div style="padding:8px 12px;border-top:1px solid #eee"><button id="promptBtn" style="width:100%" onclick="copyPrompt()">Скопировать промпт для другой ИИ</button><button style="width:100%;margin-top:6px" onclick="downloadForMT()" title="Непереведённые строки вкладки (без «пропущено нарочно»), глоссарий, программа для LM Studio / Ollama и инструкция — одним архивом">Скачать всё для перевода моделью (ZIP)</button><div id="mtLog" style="font-size:11px;color:#888;margin-top:4px"></div></div><div id="dir"style="padding:8px 12px;color:#999;font-size:11px"></div></div>
+  <h1>Файлы</h1><div id="files"></div><div style="padding:8px 12px;border-top:1px solid #eee"><button id="promptBtn" style="width:100%" onclick="copyPrompt()">Скопировать промпт для другой ИИ</button><button style="width:100%;margin-top:6px" onclick="downloadForMT()" title="Непереведённые строки вкладки (без «пропущено нарочно»), глоссарий, программа для LM Studio / Ollama и инструкция — одним архивом">Скачать всё для перевода моделью (ZIP)</button><button style="width:100%;margin-top:6px" onclick="downloadAllChapters()" title="По текстовому файлу на каждый файл вкладки: только непереведённые строки (без «пропущено нарочно»), формат как у кнопки ⬇ главы — перевод вписывается после «ru:», файлы загружаются обратно кнопкой «Загрузить перевод»">Скачать всё ZIP (по файлу на сцену)</button><div id="mtLog" style="font-size:11px;color:#888;margin-top:4px"></div></div><div id="dir"style="padding:8px 12px;color:#999;font-size:11px"></div></div>
 <div id="main">
   <div id="top">
     <label><input type="checkbox" id="onlyTodo" checked> только без перевода</label>
@@ -660,6 +660,49 @@ async function downloadChapter(f) {
     a.href = URL.createObjectURL(new Blob([out.join("\r\n")], {type: "text/plain;charset=utf-8"}));
     a.download = `${tab}_${f}.txt`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   } catch (e) { alert("Не скачалось: " + (e.message || e)); }
+}
+// ---- все главы текстом одним архивом (для перевода в чате ИИ / LM Studio вручную) ----
+const ALLCH_README = `По файлу на сцену. В каждом — только непереведённые строки.
+
+Как переводить:
+1. Откройте файл, скопируйте целиком в чат ИИ (или в LM Studio) вместе с glossary.txt и попросите:
+   «Переведи на русский. Впиши перевод после каждой строки "ru:", остальные строки не меняй».
+2. Сохраните ответ в тот же файл (.txt, UTF-8).
+3. На сайте: «Выгрузка / загрузка» -> выбрать файлы (можно сразу много или весь ZIP) -> «Загрузить перевод».
+   Заполнятся только пустые строки.`;
+async function downloadAllChapters() {
+  const log = m => { $("mtLog").textContent = m; };
+  try {
+    if (GIT) await flush();
+    const r = GIT ? null : await (await fetch("/api/files?tab=" + encodeURIComponent(tab))).json();
+    const files = GIT ? (await ghList("imports/" + tab)).filter(x => x.name.endsWith(".json")).map(x => x.name.slice(0, -5)).sort() : r.files;
+    const z = new JSZip(), dir = z.folder(tab + " - главы текстом"), ind = t => String(t || "").replace(/\r?\n/g, "\n    ");
+    let n = 0, m = 0;
+    for (const f of files) {
+      log("Собираю… " + f);
+      const d = await loadData(f);
+      const lines = d.lines.filter(l => !l.skip && !(l.new && !badNew(l)));
+      if (!lines.length) continue;
+      const out = ["\uFEFF# Глава " + f + " · вкладка " + tab,
+        "# Перевод пиши после «ru:» (можно в несколько строк). Строки @@, who, jp не меняй, они для справки.",
+        "# Загрузить обратно: «Выгрузка / загрузка» → выбрать этот файл → «Загрузить перевод».",
+        CH_MARK + f, ""];
+      for (const l of lines) {
+        out.push("@@ " + l.key);
+        if (l.spk) out.push("who: " + l.spk);
+        out.push("jp: " + ind(l.jp), "ru: ", "");
+      }
+      dir.file(`${f}.txt`, out.join("\r\n"));
+      n += lines.length; m++;
+    }
+    let gloss = ""; try { gloss = GIT ? (await ghRead(glossPath())).data.text || "" : $("gloss").value; } catch (e) {}
+    dir.file("glossary.txt", "\uFEFF" + gloss.replace(/\r?\n/g, "\r\n"));
+    dir.file("README.txt", "\uFEFF" + ALLCH_README.replace(/\n/g, "\r\n"));
+    log("Упаковываю…");
+    const a = document.createElement("a"); a.href = URL.createObjectURL(await z.generateAsync({type: "blob"}));
+    a.download = tab + " - главы текстом.zip"; a.click();
+    log(`Готово: ${n} строк в ${m} файлах`);
+  } catch (e) { log("Ошибка: " + (e.message || e)); }
 }
 let UP_FILES = null, UP_CHAPTER = "";      // загрузка кнопкой ⬆ у главы: файлы мимо поля «Загрузить перевод»
 function uploadChapter(f) {
