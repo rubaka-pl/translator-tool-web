@@ -611,6 +611,16 @@ async function downloadChapter(f) {
     a.download = `${tab}_${f}.txt`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   } catch (e) { alert("Не скачалось: " + (e.message || e)); }
 }
+let UP_FILES = null, UP_CHAPTER = "";      // загрузка кнопкой ⬆ у главы: файлы мимо поля «Загрузить перевод»
+function uploadChapter(f) {
+  const i = document.createElement("input"); i.type = "file"; i.accept = ".txt"; i.multiple = true;
+  i.onchange = async () => {
+    if (!i.files.length) return;
+    $("xfer").open = true; UP_FILES = [...i.files]; UP_CHAPTER = f;
+    try { await doUpload(); } finally { UP_FILES = null; UP_CHAPTER = ""; }
+  };
+  i.click();
+}
 function isChapterTxt(t) { return t.includes("\n" + CH_MARK) || /(^|\n)@@ /.test(t); }
 function parseChapterTxt(t) {           // -> [имя главы, [{key, new, edit}]]
   const lines = t.replace(/^\uFEFF/, "").split(/\r?\n/), items = []; let name = "", cur = null, inRu = false;
@@ -652,7 +662,10 @@ async function loadFiles() {
   for (const f of r.files) {
     const d = document.createElement("div"); d.textContent = f; d.dataset.f = f; d.onclick = () => openFile(f, d);
     const dl = document.createElement("span"); dl.className = "dl"; dl.textContent = "⬇"; dl.title = "Скачать главу текстом (Notepad++ / VS Code), потом загрузить обратно";
-    dl.onclick = e => { e.stopPropagation(); downloadChapter(f); }; d.appendChild(dl);
+    dl.onclick = e => { e.stopPropagation(); downloadChapter(f); };
+    const up = document.createElement("span"); up.className = "dl"; up.textContent = "⬆"; up.title = "Загрузить исправленный файл главы обратно";
+    up.onclick = e => { e.stopPropagation(); uploadChapter(f); };
+    d.appendChild(up); d.appendChild(dl);
     if (r.left && r.left[f] === 0) d.classList.add("ok");          // переводить нечего — серая
     $("files").appendChild(d);
   }
@@ -1112,7 +1125,7 @@ function modal(title) {
   return m;
 }
 async function readParts() {            // [[имя главы или "", содержимое]]
-  const fs = [...$("upFile").files], txt = $("upText").value.trim();
+  const fs = UP_FILES || [...$("upFile").files], txt = UP_FILES ? "" : $("upText").value.trim();
   if (txt) return [isChapterTxt(txt) ? parseChapterTxt(txt) : ["", parseLoose(txt)]];
   if (!fs.length) return null;
   const parts = [];
@@ -1126,7 +1139,9 @@ async function readParts() {            // [[имя главы или "", сод
       continue;
     }
     const t = await f0.text();
-    parts.push(isChapterTxt(t) ? parseChapterTxt(t) : ["", parseLoose(t)]);
+    const part = isChapterTxt(t) ? parseChapterTxt(t) : ["", parseLoose(t)];
+    if (!part[0] && UP_CHAPTER) part[0] = UP_CHAPTER;      // без строки #chapter — в ту главу, у которой нажали ⬆
+    parts.push(part);
   }
   return parts;
 }
