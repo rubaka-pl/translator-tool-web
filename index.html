@@ -35,8 +35,11 @@
   #files div.all { font-weight:800; }
   #files div.all::before { content:""; }
   #files div.ok { color:var(--mute); opacity:.65; }
-  #files div .dl { float:right; padding:0 4px; border-radius:6px; opacity:.45; font-size:12px; }
-  #files div .dl:hover { opacity:1; background:var(--line); }
+  #files div[data-f] { display:flex; align-items:center; gap:4px; }
+  #files div .nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #files div .dl { flex:none; padding:0 7px; line-height:22px; border-radius:7px; background:var(--acc); color:#fff !important; font-weight:800; font-size:13px; opacity:.85; }
+  #files div .dl:hover { opacity:1; transform:scale(1.1); }
+  #files div.on .dl { background:#fff; color:var(--acc) !important; }
   #files div.on .dl { opacity:.9; }
   #files div.ok::before { content:"✓ "; color:var(--mute); }
   #files div.on { background:linear-gradient(90deg, var(--acc), var(--acc2)); color:#fff; font-weight:800; }
@@ -660,12 +663,13 @@ async function loadFiles() {
   const a = document.createElement("div"); a.className = "all"; a.id = "allProg"; a.onclick = () => openAll(a);
   $("files").appendChild(a); updAll();
   for (const f of r.files) {
-    const d = document.createElement("div"); d.textContent = f; d.dataset.f = f; d.onclick = () => openFile(f, d);
+    const d = document.createElement("div"); d.dataset.f = f; d.title = f; d.onclick = () => openFile(f, d);
+    const nm = document.createElement("span"); nm.className = "nm"; nm.textContent = f; d.appendChild(nm);
     const dl = document.createElement("span"); dl.className = "dl"; dl.textContent = "⬇"; dl.title = "Скачать главу текстом (Notepad++ / VS Code), потом загрузить обратно";
     dl.onclick = e => { e.stopPropagation(); downloadChapter(f); };
     const up = document.createElement("span"); up.className = "dl"; up.textContent = "⬆"; up.title = "Загрузить исправленный файл главы обратно";
     up.onclick = e => { e.stopPropagation(); uploadChapter(f); };
-    d.appendChild(up); d.appendChild(dl);
+    d.appendChild(dl); d.appendChild(up);
     if (r.left && r.left[f] === 0) d.classList.add("ok");          // переводить нечего — серая
     $("files").appendChild(d);
   }
