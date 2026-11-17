@@ -590,7 +590,7 @@ async function downloadForMT() {
     const scenes = []; let n = 0;
     for (const f of files) {
       const d = (await ghRead("imports/" + tab + "/" + f)).data;
-      const lines = d.lines.filter(l => !l.skip && !(l.new && !badNew(l)))
+      const lines = d.lines.filter(l => !l.skip && !l.mine && !(l.new && !badNew(l)))
         .map(l => ({key: l.key, spk: l.spk || "", spk_ru: l.spk || "", jp: l.jp}));
       if (lines.length) { scenes.push({scene: d.file || f.replace(/\.json$/, ""), lines}); n += lines.length; }
       log(`Собираю строки… ${f}`);
@@ -681,7 +681,7 @@ async function downloadAllChapters() {
     for (const f of files) {
       log("Собираю… " + f);
       const d = await loadData(f);
-      const lines = d.lines.filter(l => !l.skip && !(l.new && !badNew(l)));
+      const lines = d.lines.filter(l => !l.skip && !l.mine && !(l.new && !badNew(l)));
       if (!lines.length) continue;
       const out = ["\uFEFF# Глава " + f + " · вкладка " + tab,
         "# Перевод пиши после «ru:» (можно в несколько строк). Строки @@, who, jp не меняй, они для справки.",
