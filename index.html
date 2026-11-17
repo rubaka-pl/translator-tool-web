@@ -35,6 +35,9 @@
   #files div.all { font-weight:800; }
   #files div.all::before { content:""; }
   #files div.ok { color:var(--mute); opacity:.65; }
+  #files div .dl { float:right; padding:0 4px; border-radius:6px; opacity:.45; font-size:12px; }
+  #files div .dl:hover { opacity:1; background:var(--line); }
+  #files div.on .dl { opacity:.9; }
   #files div.ok::before { content:"✓ "; color:var(--mute); }
   #files div.on { background:linear-gradient(90deg, var(--acc), var(--acc2)); color:#fff; font-weight:800; }
   #files div.on::before { content:"❤ "; color:#fff; }
@@ -332,9 +335,9 @@
   "5428": "перевод строки 5428"
 }</div>
   <textarea id="upText" placeholder="Вставь сырой JSON" style="height:70px;font-size:12px;margin-top:6px"></textarea>
-  <input type="file" id="upFile" accept=".zip,.json,.txt" style="width:100%;margin-top:4px;font-size:12px">
+  <input type="file" id="upFile" accept=".zip,.json,.txt" multiple style="width:100%;margin-top:4px;font-size:12px">
   <button id="upGo" style="width:100%;margin-top:4px" onclick="doUpload()">Загрузить перевод</button>
-  <div style="font-size:11px;color:#777;margin-top:4px">Вставь текст или выбери ZIP / .json / .txt. Строки сами разложатся по главам по ключам, открывать главу не нужно. Заполненные (зелёные) строки не трогаются.</div>
+  <div style="font-size:11px;color:#777;margin-top:4px">Вставь текст или выбери ZIP / .json / .txt (можно несколько, в том числе главы, скачанные кнопкой ⬇ у главы). Строки сами разложатся по главам по ключам, открывать главу не нужно. Заполненные (зелёные) строки не трогаются.</div>
   <pre id="upLog" style="white-space:pre-wrap;font-size:11px;color:#555;max-height:140px;overflow:auto;margin:4px 0 0"></pre></div></details>
   <h1>Файлы</h1><div id="files"></div><div style="padding:8px 12px;border-top:1px solid #eee"><button id="promptBtn" style="width:100%" onclick="copyPrompt()">Скопировать промпт для другой ИИ</button></div><div id="dir"style="padding:8px 12px;color:#999;font-size:11px"></div></div>
 <div id="main">
@@ -583,6 +586,47 @@ function downloadGloss() {
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([$("gloss").value], {type: "text/plain;charset=utf-8"}));
   a.download = `glossary_${tab}.txt`; a.click();
 }
+// ---- глава текстом: скачать, править в Notepad++ / VS Code, загрузить обратно (кнопка «Загрузить перевод») ----
+// формат: «@@ ключ», ниже who/jp/old для справки, перевод после «ru:» (может быть в несколько строк)
+const CH_MARK = "#chapter: ";
+async function downloadChapter(f) {
+  try {
+    if (GIT) await flush();
+    const d = await loadData(f), ind = t => String(t || "").replace(/\r?\n/g, "\n    ");
+    const out = ["\uFEFF# Глава " + f + " · вкладка " + tab,
+      "# Перевод пиши после «ru:» (можно в несколько строк). Строки @@, who, jp, old не меняй, они для справки.",
+      "# Готовые строки тоже можно поправить: при загрузке правки покажутся с ⚠ «было → стало».",
+      "# Загрузить обратно: «Выгрузка / загрузка» → выбрать этот файл → «Загрузить перевод».",
+      CH_MARK + f, ""];
+    for (const l of d.lines) {
+      out.push("@@ " + l.key);
+      if (l.spk) out.push("who: " + l.spk);
+      out.push("jp: " + ind(l.jp));
+      if (l.old && l.old !== l.new) out.push("old: " + ind(l.old));
+      if (l.skip) out.push("# пропущено нарочно");
+      out.push("ru: " + (l.new || ""), "");
+    }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([out.join("\r\n")], {type: "text/plain;charset=utf-8"}));
+    a.download = `${tab}_${f}.txt`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  } catch (e) { alert("Не скачалось: " + (e.message || e)); }
+}
+function isChapterTxt(t) { return t.includes("\n" + CH_MARK) || /(^|\n)@@ /.test(t); }
+function parseChapterTxt(t) {           // -> [имя главы, [{key, new, edit}]]
+  const lines = t.replace(/^\uFEFF/, "").split(/\r?\n/), items = []; let name = "", cur = null, inRu = false;
+  const end = () => { if (cur) { while (cur.ru.length && !cur.ru[cur.ru.length - 1].trim()) cur.ru.pop();
+    items.push({key: cur.key, new: cur.ru.join("\n").trim(), edit: true}); } };
+  for (const raw of lines) {
+    if (!cur && raw.startsWith(CH_MARK)) { name = raw.slice(CH_MARK.length).trim(); continue; }
+    const h = raw.match(/^@@ (.+)$/);
+    if (h) { end(); cur = {key: h[1].trim(), ru: []}; inRu = false; continue; }
+    if (!cur) continue;
+    if (inRu) { cur.ru.push(raw); continue; }
+    if (raw.startsWith("ru:")) { inRu = true; cur.ru.push(raw.slice(3).replace(/^ /, "")); }
+  }
+  end();
+  return [name, items];
+}
 
 async function loadFiles() {
   const r = GIT ? await gitFiles() : await (await fetch("/api/files?tab=" + encodeURIComponent(tab))).json();
@@ -607,6 +651,8 @@ async function loadFiles() {
   $("files").appendChild(a); updAll();
   for (const f of r.files) {
     const d = document.createElement("div"); d.textContent = f; d.dataset.f = f; d.onclick = () => openFile(f, d);
+    const dl = document.createElement("span"); dl.className = "dl"; dl.textContent = "⬇"; dl.title = "Скачать главу текстом (Notepad++ / VS Code), потом загрузить обратно";
+    dl.onclick = e => { e.stopPropagation(); downloadChapter(f); }; d.appendChild(dl);
     if (r.left && r.left[f] === 0) d.classList.add("ok");          // переводить нечего — серая
     $("files").appendChild(d);
   }
@@ -1066,15 +1112,23 @@ function modal(title) {
   return m;
 }
 async function readParts() {            // [[имя главы или "", содержимое]]
-  const f0 = $("upFile").files[0], txt = $("upText").value.trim();
-  if (txt) return [["", parseLoose(txt)]];
-  if (!f0) return null;
-  if (/\.zip$/i.test(f0.name)) {
-    const z = await JSZip.loadAsync(await f0.arrayBuffer()), parts = [];
-    for (const n of Object.keys(z.files)) if (n.endsWith(".json") && !z.files[n].dir) parts.push([n.split("/").pop().slice(0, -5), parseLoose(await z.files[n].async("string"))]);
-    return parts;
+  const fs = [...$("upFile").files], txt = $("upText").value.trim();
+  if (txt) return [isChapterTxt(txt) ? parseChapterTxt(txt) : ["", parseLoose(txt)]];
+  if (!fs.length) return null;
+  const parts = [];
+  for (const f0 of fs) {
+    if (/\.zip$/i.test(f0.name)) {
+      const z = await JSZip.loadAsync(await f0.arrayBuffer());
+      for (const n of Object.keys(z.files)) if (!z.files[n].dir) {
+        if (n.endsWith(".json")) parts.push([n.split("/").pop().slice(0, -5), parseLoose(await z.files[n].async("string"))]);
+        else if (n.endsWith(".txt")) { const t = await z.files[n].async("string"); if (isChapterTxt(t)) parts.push(parseChapterTxt(t)); }
+      }
+      continue;
+    }
+    const t = await f0.text();
+    parts.push(isChapterTxt(t) ? parseChapterTxt(t) : ["", parseLoose(t)]);
   }
-  return [["", parseLoose(await f0.text())]];
+  return parts;
 }
 async function chapterNames() {
   if (GIT) return new Set((await ghList("imports/" + tab)).map(x => x.name).filter(n => n.endsWith(".json")));
@@ -1134,9 +1188,12 @@ async function buildPlan(parts) {       // ничего не пишет: тол�
         if (!l) { cnt.unknown++; continue; }
         if (!v) { cnt.empty++; continue; }
         if ((l.new || "") === v) { cnt.same++; continue; }
-        if (l.skip || (l.new && !badNew(l))) { cnt.kept++; continue; }   // готовое и «пропущено нарочно» — только руками
+        // готовое и «пропущено нарочно» — только руками; из главы-текста (⬇) готовое можно поправить, но с ⚠
+        const fix = it.edit && !l.skip && l.new && !badNew(l);
+        if (!fix && (l.skip || (l.new && !badNew(l)))) { cnt.kept++; continue; }
         if (seen.has(k)) continue; seen.add(k);
-        changes.push({key: k, jp: l.jp || "", was: l.new || "", now: v, flags: suspicious(l.jp, v)});
+        const flags = suspicious(l.jp, v); if (fix) flags.unshift("правка готовой строки");
+        changes.push({key: k, jp: l.jp || "", was: l.new || "", now: v, flags, edit: !!fix});
       }
       if (changes.length) chapters.push({name, sha, data: d, changes});
     } catch (e) { skipped.push(`${name} (${e.message || e})`); }
@@ -1154,7 +1211,8 @@ function showPlan(plan) {               // окно: что запишется; 
       alien.map(([c, k, n]) => `⛔ ${c}: у ${k} из ${n} строк реплика/текст не совпадают с оригиналом. Похоже, это перевод ДРУГОЙ главы — лучше «Отмена» и проверь, какая глава открыта.\n`).join("") +
       `Запишется строк: ${all.length} (глав: ${plan.chapters.length}). Подозрительных: ${bad.length}.\n` +
       (bad.length ? "Подозрительные запишутся с пометкой ⚠ (жёлтые, не зелёные): найдёшь их галочкой «только ⚠» и проверишь руками.\n" : "") +
-      `Уже переведённые строки не меняются (не тронуто: ${plan.cnt.kept}).` + (plan.cnt.unknown ? ` Чужих ключей: ${plan.cnt.unknown}.` : "") +
+      (all.some(x => x.edit) ? `Правок готовых строк: ${all.filter(x => x.edit).length} (с ⚠; «Записать только без ⚠» их не тронет). ` : "") +
+      `Остальные переведённые строки не меняются (не тронуто: ${plan.cnt.kept}).` + (plan.cnt.unknown ? ` Чужих ключей: ${plan.cnt.unknown}.` : "") +
       (plan.skipped.length ? `\nПропущено: ${plan.skipped.join(", ")}` : "");
     const list = m.querySelector(".mlist");
     list.innerHTML = `<div class="mrow head"><span>Глава · ключ</span><span>Японский</span><span>Перевод</span><span>Что не так</span></div>`;
@@ -1184,7 +1242,7 @@ async function applyPlan(plan, mode) {
           const before = JSON.parse(JSON.stringify(d)), map = new Map(d.lines.map(l => [String(l.key), l]));
           n = rv = 0;
           for (const x of ch) {
-            const l = map.get(x.key); if (!l || l.skip || (l.new && !badNew(l))) continue;
+            const l = map.get(x.key); if (!l || l.skip || (!x.edit && l.new && !badNew(l))) continue;
             l.new = x.now; if (x.flags.length) { l.review = x.flags.join(", "); rv++; } else delete l.review; n++;
           }
           if (!n) break;
