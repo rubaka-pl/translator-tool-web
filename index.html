@@ -342,7 +342,7 @@
   <button id="upGo" style="width:100%;margin-top:4px" onclick="doUpload()">Загрузить перевод</button>
   <div style="font-size:11px;color:#777;margin-top:4px">Вставь текст или выбери ZIP / .json / .txt (можно несколько, в том числе главы, скачанные кнопкой ⬇ у главы). Строки сами разложатся по главам по ключам, открывать главу не нужно. Заполненные (зелёные) строки не трогаются.</div>
   <pre id="upLog" style="white-space:pre-wrap;font-size:11px;color:#555;max-height:140px;overflow:auto;margin:4px 0 0"></pre></div></details>
-  <h1>Файлы</h1><div id="files"></div><div style="padding:8px 12px;border-top:1px solid #eee"><button id="promptBtn" style="width:100%" onclick="copyPrompt()">Скопировать промпт для другой ИИ</button><button style="width:100%;margin-top:6px" onclick="downloadForMT()" title="Непереведённые строки вкладки (без «пропущено нарочно»), глоссарий, программа для LM Studio / Ollama и инструкция — одним архивом">Скачать всё для перевода моделью (ZIP)</button><button style="width:100%;margin-top:6px" onclick="downloadAllChapters()" title="По текстовому файлу на каждый файл вкладки: только непереведённые строки (без «пропущено нарочно»), формат как у кнопки ⬇ главы — перевод вписывается после «ru:», файлы загружаются обратно кнопкой «Загрузить перевод»">Скачать всё ZIP (по файлу на сцену)</button><div id="mtLog" style="font-size:11px;color:#888;margin-top:4px"></div></div><div id="dir"style="padding:8px 12px;color:#999;font-size:11px"></div></div>
+  <h1>Файлы</h1><div id="files"></div><div style="padding:8px 12px;border-top:1px solid #eee"><button id="promptBtn" style="width:100%" onclick="copyPrompt()">Скопировать промпт для другой ИИ</button><button style="width:100%;margin-top:6px" onclick="downloadForMT()" title="Непереведённые строки вкладки (без «пропущено нарочно»), глоссарий, программа для LM Studio / Ollama и инструкция — одним архивом">Скачать всё для перевода моделью (ZIP)</button><button style="width:100%;margin-top:6px" onclick="downloadForMT(true)" title="То же самое, но модель перед переводом думает (thinking включён): медленнее, иногда точнее. В settings.txt think=yes, предел ответа больше">Скачать всё для перевода моделью — с размышлениями (ZIP)</button><button style="width:100%;margin-top:6px" onclick="downloadAllChapters()" title="По текстовому файлу на каждый файл вкладки: только непереведённые строки (без «пропущено нарочно»), формат как у кнопки ⬇ главы — перевод вписывается после «ru:», файлы загружаются обратно кнопкой «Загрузить перевод»">Скачать всё ZIP (по файлу на сцену)</button><div id="mtLog" style="font-size:11px;color:#888;margin-top:4px"></div></div><div id="dir"style="padding:8px 12px;color:#999;font-size:11px"></div></div>
 <div id="main">
   <div id="top">
     <label><input type="checkbox" id="onlyTodo" checked> только без перевода</label>
@@ -580,7 +580,7 @@ const MT_README = `Перевод локальной моделью — инст
 7. Правьте на сайте то, что вышло криво.
 
 Строки «пропущено нарочно» в архив не попадают. Глоссарий — glossary.txt (можно дописывать).`;
-async function downloadForMT() {
+async function downloadForMT(think = false) {
   const log = m => { $("mtLog").textContent = m; };
   if (!GIT) { log("Только в онлайн-версии"); return; }
   try {
@@ -599,17 +599,21 @@ async function downloadForMT() {
     log("Скачиваю программу…");
     const r = await fetch(`https://api.github.com/repos/${DATA_REPO}/contents/${enc(MT_EXE)}?ref=${BRANCH}`,
       {cache: "no-store", headers: {Authorization: "Bearer " + TOKEN, Accept: "application/vnd.github.raw"}});
-    const z = new JSZip(), dir = z.folder(tab + " - перевод моделью");
+    const name = tab + " - перевод моделью" + (think ? " (с размышлениями)" : "");
+    const z = new JSZip(), dir = z.folder(name);
     dir.file("text.json", JSON.stringify(scenes, null, 1));
     dir.file("glossary.txt", gloss);
     dir.file("settings.txt", ["# адрес сервера: LM Studio — http://localhost:1234/v1, Ollama — http://localhost:11434/v1",
       "server=http://localhost:1234/v1", "# имя модели, как в LM Studio / Ollama", "model=google/gemma-3-12b",
-      "temperature=0.3", ""].join("\r\n"));
+      "temperature=0.3", "# сколько ждать ответа на один кусок (секунд) и предел длины ответа",
+      "timeout=" + (think ? 1800 : 900), "max_tokens=" + (think ? 16384 : 4096),
+      "# размышления модели (thinking): no — выключить (быстрее), yes — модель сначала думает, потом переводит",
+      "think=" + (think ? "yes" : "no"), "# показывать на экране, что модель думает и пишет: yes / no", "show=yes", ""].join("\r\n"));
     dir.file("README.txt", "﻿" + MT_README.replace(/\n/g, "\r\n"));
     if (r.ok) dir.file("Перевести локальной моделью.exe", await r.arrayBuffer());
     log("Упаковываю…");
     const a = document.createElement("a"); a.href = URL.createObjectURL(await z.generateAsync({type: "blob"}));
-    a.download = tab + " - перевод моделью.zip"; a.click();
+    a.download = name + ".zip"; a.click();
     log(`Готово: ${n} строк в ${scenes.length} файлах` + (r.ok ? "" : " (программы в репозитории нет — только текст)"));
   } catch (e) { log("Ошибка: " + e.message); }
 }
