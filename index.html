@@ -608,7 +608,10 @@ async function downloadForMT(think = false) {
       "temperature=0.3", "# сколько ждать ответа на один кусок (секунд) и предел длины ответа",
       "timeout=" + (think ? 1800 : 900), "max_tokens=" + (think ? 16384 : 4096),
       "# размышления модели (thinking): no — выключить (быстрее), yes — модель сначала думает, потом переводит",
-      "think=" + (think ? "yes" : "no"), "# показывать на экране, что модель думает и пишет: yes / no", "show=yes", ""].join("\r\n"));
+      "think=" + (think ? "yes" : "no"), "# показывать на экране, что модель думает и пишет: yes / no", "show=yes",
+      "# тонкая настройка модели: уберите # и поставьте число",
+      "# repeat_penalty — штраф за повторы (1.05–1.1 помогает, если модель ходит по кругу)",
+      (think ? "" : "#") + "repeat_penalty=1.05", "#top_p=0.95", "#top_k=40", "#min_p=0.05", ""].join("\r\n"));
     dir.file("README.txt", "﻿" + MT_README.replace(/\n/g, "\r\n"));
     if (r.ok) dir.file("Перевести локальной моделью.exe", await r.arrayBuffer());
     log("Упаковываю…");
