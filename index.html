@@ -451,7 +451,8 @@ async function saveStats() {            // счётчики глав (серая
   const path = "stats/" + tab + ".json";
   for (let n = 0; n < 3; n++) {
     let sha = null, cur = {}; try { const r = await ghRead(path); sha = r.sha; cur = r.data; } catch (e) {}
-    const st = {left: {...(cur.left || {}), ...tabStats.left}, total: {...(cur.total || {}), ...tabStats.total}};
+    const have = new Set(allFiles), only = o => Object.fromEntries(Object.entries(o).filter(([k]) => have.has(k)));
+    const st = {left: only({...(cur.left || {}), ...tabStats.left}), total: only({...(cur.total || {}), ...tabStats.total})};
     if (JSON.stringify(st) === JSON.stringify({left: cur.left || {}, total: cur.total || {}})) return;
     const r = await ghWrite(path, st, sha, "Счётчики глав: " + tab);
     if (r.ok || (r.status !== 409 && r.status !== 422)) return;
@@ -472,7 +473,8 @@ async function gitFiles() {
   if (!tab || !tabs.includes(tab)) tab = tabs[0];
   const files = (await ghList("imports/" + tab)).filter(x => x.name.endsWith(".json")).map(x => x.name.slice(0, -5));
   let st = {}; try { st = (await ghRead("stats/" + tab + ".json")).data; } catch (e) {}   // {left, total} по главам (пишет выгрузка)
-  return {tabs, hidden, files, left: st.left || st, total: st.total || {}, dir: DATA_REPO + "/imports/" + tab};
+  const have = new Set(files), only = o => Object.fromEntries(Object.entries(o || {}).filter(([k]) => have.has(k)));   // записи про главы, которых уже нет (переименованы), не считаем
+  return {tabs, hidden, files, left: only(st.left || st), total: only(st.total), dir: DATA_REPO + "/imports/" + tab};
 }
 async function loadData(f) {
   if (!GIT) return (await fetch("/api/file/" + encodeURIComponent(f) + "?tab=" + encodeURIComponent(tab))).json();
@@ -766,7 +768,7 @@ async function loadFiles() {
   $("dir").textContent = r.dir;
   if (tab) loadGloss();
   $("files").innerHTML = "";
-  tabStats = {left: {...(r.left || {})}, total: {...(r.total || {})}}; showAll = false;
+  allFiles = r.files; tabStats = {left: {...(r.left || {})}, total: {...(r.total || {})}}; showAll = false;
   const a = document.createElement("div"); a.className = "all"; a.id = "allProg"; a.onclick = () => openAll(a);
   $("files").appendChild(a); updAll();
   for (const f of r.files) {
@@ -845,7 +847,7 @@ function markFile() {                  // открытая глава: сера�
   }
 }
 // ---- общий прогресс вкладки: по счётчикам глав (stats), открытая глава — по живым данным ----
-let tabStats = {left: {}, total: {}}, showAll = false;
+let tabStats = {left: {}, total: {}}, showAll = false, allFiles = [];
 function allNums() {
   const fs = Object.keys(tabStats.total); if (!fs.length) return null;
   const n = fs.reduce((a, f) => a + tabStats.total[f], 0), left = fs.reduce((a, f) => a + (tabStats.left[f] || 0), 0);
