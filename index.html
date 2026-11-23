@@ -354,7 +354,7 @@
     <select id="theme" title="тема" onchange="setTheme(this.value)"></select>
   </div>
   <div id="list"></div>
-  <div id="mid"><button id="copyView" onclick="copyView()">Промпт + всё на экране</button> <button id="copy10" class="copyN" onclick="copyN(10, this)">Промпт + 10 строк</button> <button class="copyN" onclick="copyN(30, this)">+ 30</button> <button class="copyN" onclick="copyN(50, this)">+ 50</button> <button class="copyN" onclick="copyN(100, this)">+ 100</button> <button id="copyTodo" onclick="copyTodo()">Промпт + все непереведённые</button> <button id="oldAll" onclick="oldToNewAll()" title="во все пустые строки главы подставить старый перевод">Старый → мой (вся глава)</button> <button id="revBtn" onclick="showRevisions()" title="последние 10 состояний главы: посмотреть разницу и откатить">🕓 Ревизии главы</button></div>
+  <div id="mid"><button id="copyView" onclick="copyView()">Промпт + всё на экране</button> <button id="copy10" class="copyN" onclick="copyN(10, this)">Промпт + 10 строк</button> <button class="copyN" onclick="copyN(30, this)">+ 30</button> <button class="copyN" onclick="copyN(50, this)">+ 50</button> <button class="copyN" onclick="copyN(100, this)">+ 100</button> <button id="copyTodo" onclick="copyTodo()">Промпт + все непереведённые</button> <button id="oldAll" onclick="oldToNewAll()" title="во все пустые строки главы подставить старый перевод">Старый → мой (вся глава)</button> <button id="mtAll" onclick="mtChapter()" title="все строки главы без перевода — машинным переводом (движок выбран у японской строки); пишется сразу, с пометкой ⚠ — проверь фильтром «только ⚠»">🌐 Перевести всю главу</button> <button id="revBtn" onclick="showRevisions()" title="последние 10 состояний главы: посмотреть разницу и откатить">🕓 Ревизии главы</button></div>
   <div id="ed">
     <div class="src"><b>№ / кто</b><span id="eKey"></span></div>
     <div class="src"><b>Японский</b><span id="eJp"></span> <button onclick="cp('jp')">копировать</button> <select id="mtEngine" title="движок машинного перевода" onchange="lsSet('mtEngine', this.value)"><option value="deepl">DeepL</option><option value="google">Google</option><option value="ms">Microsoft</option><option value="mymemory">MyMemory (без ключа)</option></select> <button id="mtBtn" onclick="mt(event.shiftKey)" title="машинный перевод выбранным движком в поле «Мой перевод» (не сохраняет: поправь и Enter). Alt+Enter в поле — то же. Shift+клик — сменить ключ движка">🌐 перевести</button></div>
@@ -414,6 +414,8 @@ function setToken() {
   try { localStorage.ghToken = TOKEN; } catch (e) {}
   $("tokrow").style.display = "none"; setGit(""); loadFiles().catch(e => setGit("Ошибка: " + e.message));
 }
+// правка в очереди: строка — ручная (снимает ⚠), {new, review} — машинный перевод с пометкой ⚠
+const applyEdit = (l, v) => { if (typeof v === "string") { l.new = v; delete l.review; } else { l.new = v.new; if (v.review) l.review = v.review; else delete l.review; } };
 async function flush() {                // отправляет накопленные правки одним коммитом на файл
   clearTimeout(flushTimer); flushTimer = null;
   if (flushing) { flushTimer = setTimeout(flush, 2000); return; }
@@ -429,7 +431,7 @@ async function flush() {                // отправляет накоплен
           lastRev[path] = Date.now(); await saveRevision(f0, JSON.parse(JSON.stringify(d)), "перед правками вручную");
         }
         const by = new Map(d.lines.map(l => [l.key, l]));
-        for (const [k, v] of Object.entries(edits)) { const l = by.get(k); if (l) { l.new = v; delete l.review; } }   // только new (+ снять ⚠)
+        for (const [k, v] of Object.entries(edits)) { const l = by.get(k); if (l) applyEdit(l, v); }   // только new (+ ⚠)
         const r = await ghWrite(path, d, sha, "Перевод: " + path.split("/").pop().replace(/\.json$/, ""));
         if (r.ok) {
           done = true; if (pending[path] === edits) delete pending[path];
@@ -479,7 +481,7 @@ async function gitFiles() {
 async function loadData(f) {
   if (!GIT) return (await fetch("/api/file/" + encodeURIComponent(f) + "?tab=" + encodeURIComponent(tab))).json();
   const d = (await ghRead(dataPath(f))).data, ed = pending[dataPath(f)] || {};
-  for (const l of d.lines) if (l.key in ed) l.new = ed[l.key];
+  for (const l of d.lines) if (l.key in ed) applyEdit(l, ed[l.key]);
   return d;
 }
 function mergeLocal(d, inc) {           // те же правила, что на сервере: только пустые строки, заполненные не трогаем
@@ -993,62 +995,110 @@ async function mtFetch(name, url, opt) {
   throw new MtError(name + ": ошибка " + r.status + (m ? " — " + m.slice(0, 80) : ""));
 }
 if (GIT && !lsGet("deeplProxy")) lsSet("deeplProxy", "https://deepl-proxy.shaitan-perevod.workers.dev");   // свой прокси (tools/deepl-worker.js)
+// у каждого движка many(список японских строк, контекст, ключи) -> список переводов; batch — сколько строк за запрос
 const MT = {
-  deepl: {name: "DeepL",
+  deepl: {name: "DeepL", batch: 40,
     keys: [["deeplKey", "Ключ DeepL API (бесплатный — 500 000 знаков в месяц, кончается на :fx).\nВзять: https://www.deepl.com/your-account/keys"]]
       .concat(GIT ? [["deeplProxy", "Адрес прокси DeepL (Cloudflare Worker из tools/deepl-worker.js), обычно https://deepl-proxy.shaitan-perevod.workers.dev"]] : []),
-    async run(jp, prev, [key, proxy]) {
-      const tags = MT_TAG().test(jp);
-      const params = {text: [tags ? escH(jp).replace(MT_TAG(), m => `<x>${m}</x>`) : jp], source_lang: "JA", target_lang: "RU",
+    async many(jps, prev, [key, proxy]) {
+      const tags = jps.some(jp => MT_TAG().test(jp));
+      const params = {text: jps.map(jp => tags ? escH(jp).replace(MT_TAG(), m => `<x>${m}</x>`) : jp), source_lang: "JA", target_lang: "RU",
         preserve_formatting: true, ...(prev.trim() ? {context: prev} : {}), ...(tags ? {tag_handling: "xml", ignore_tags: ["x"]} : {})};
       const j = await mtFetch("DeepL", GIT ? proxy : "/api/deepl", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({key, params})});
-      const t = j.translations[0].text; return tags ? fromHtml(t) : t;
+      return j.translations.map(x => tags ? fromHtml(x.text) : x.text);
     }},
-  google: {name: "Google",
+  google: {name: "Google", batch: 40,
     keys: [["googleKey", "Ключ Google Cloud Translation API (500 000 знаков в месяц бесплатно).\nВзять: console.cloud.google.com → APIs & Services: включить Cloud Translation API, потом Credentials → Create API key. Ограничь ключ этим сайтом (HTTP referrers) и только Translation API."]],
-    async run(jp, prev, [key]) {
+    async many(jps, prev, [key]) {
       const j = await mtFetch("Google", "https://translation.googleapis.com/language/translate/v2?key=" + encodeURIComponent(key),
-        {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({q: [toHtml(jp)], source: "ja", target: "ru", format: "html"})});
-      return fromHtml(j.data.translations[0].translatedText);
+        {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({q: jps.map(toHtml), source: "ja", target: "ru", format: "html"})});
+      return j.data.translations.map(x => fromHtml(x.translatedText));
     }},
-  ms: {name: "Microsoft",
+  ms: {name: "Microsoft", batch: 40,
     keys: [["msKey", "Ключ Microsoft Translator (Azure, уровень F0 — 2 000 000 знаков в месяц бесплатно).\nВзять: portal.azure.com → создать Translator (Pricing tier F0) → Keys and Endpoint → KEY 1"],
            ["msRegion", "Регион ресурса Translator (Location/Region на той же странице, например westeurope; global — если глобальный)"]],
-    async run(jp, prev, [key, region]) {
+    async many(jps, prev, [key, region]) {
       const h = {"Ocp-Apim-Subscription-Key": key, "Content-Type": "application/json"};
       if (region.toLowerCase() !== "global") h["Ocp-Apim-Subscription-Region"] = region;
       const j = await mtFetch("Microsoft", "https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&from=ja&to=ru&textType=html",
-        {method: "POST", headers: h, body: JSON.stringify([{Text: toHtml(jp)}])});
-      return fromHtml(j[0].translations[0].text);
+        {method: "POST", headers: h, body: JSON.stringify(jps.map(jp => ({Text: toHtml(jp)})))});
+      return j.map(x => fromHtml(x.translations[0].text));
     }},
-  mymemory: {name: "MyMemory", keys: [],          // без ключа: ~5000 знаков в день, строка до 500 байт
-    async run(jp) {
+  mymemory: {name: "MyMemory", batch: 1, keys: [], dayLimit: 5000,      // без ключа: ~5000 знаков в день, строка до 500 байт
+    async many([jp]) {
       const j = await mtFetch("MyMemory", "https://api.mymemory.translated.net/get?langpair=ja%7Cru&q=" + encodeURIComponent(jp));
       if (j.responseStatus != 200) throw new MtError("MyMemory: " + (j.quotaFinished ? "лимит на сегодня исчерпан" : String(j.responseDetails || j.responseStatus).slice(0, 80)));
-      return unescH(j.responseData.translatedText || "");
+      return [unescH(j.responseData.translatedText || "")];
     }},
 };
 $("mtEngine").value = MT[lsGet("mtEngine")] ? lsGet("mtEngine") : "deepl";
 const MT_LABEL = "🌐 перевести";
 let mtBusy = false;
-async function mt(reset) {
+function mtKeys(eng, reset) {          // ключи движка: из браузера, а нет — спросить; null — человек отказался
+  const vals = [];
+  for (const [k, msg] of eng.keys) { const v = (!reset && lsGet(k)) || askLs(k, msg); if (!v) return null; vals.push(v); }
+  return vals;
+}
+const mtPrev = (d, at) => d.lines.slice(Math.max(0, at - 3), at).map(x => (x.spk ? x.spk + ": " : "") + (x.jp || "")).join("\n");
+const mtErr = (eng, e) => { if (e.badKey && eng.keys.length) lsSet(eng.keys[0][0], ""); return e instanceof MtError ? e.message : eng.name + ": непонятный ответ"; };
+async function mt(reset) {             // одна строка -> в поле «Мой перевод» (не сохраняет: поправь и Enter)
   if (cur < 0 || !data || mtBusy) return;
   const eng = MT[$("mtEngine").value] || MT.deepl, at = cur, jp = data.lines[at].jp || "", btn = $("mtBtn");
   const flash = t => { btn.textContent = t; setTimeout(() => btn.textContent = MT_LABEL, 3000); };
   if (!jp.trim()) return flash("Нет японского текста");
-  const vals = [];
-  for (const [k, msg] of eng.keys) { const v = (!reset && lsGet(k)) || askLs(k, msg); if (!v) return; vals.push(v); }
-  const prev = data.lines.slice(Math.max(0, at - 3), at).map(x => (x.spk ? x.spk + ": " : "") + (x.jp || "")).join("\n");
+  const vals = mtKeys(eng, reset); if (!vals) return;
   mtBusy = true; btn.disabled = true; btn.textContent = eng.name + "…";
   try {
-    const t = (await eng.run(jp, prev, vals)).trim();
+    const t = ((await eng.many([jp], mtPrev(data, at), vals))[0] || "").trim();
     btn.textContent = MT_LABEL;
     if (cur !== at) return;              // пока ждали, ушёл на другую строку — не подставляем в чужую
     const e = $("eNew"); e.value = t; e.focus(); e.setSelectionRange(t.length, t.length);
-  } catch (e) {
-    if (e.badKey && eng.keys.length) lsSet(eng.keys[0][0], "");
-    flash(e instanceof MtError ? e.message : eng.name + ": непонятный ответ");
-  } finally { mtBusy = false; btn.disabled = false; }
+  } catch (e) { flash(mtErr(eng, e)); }
+  finally { mtBusy = false; btn.disabled = false; }
+}
+async function mtChapter() {           // все строки главы без перевода -> сразу в файл, с пометкой ⚠ (проверить и сохранить руками)
+  const btn = $("mtAll"), label = btn.dataset.label ||= btn.textContent;
+  const say = (t, ms = 3000) => { btn.textContent = t; if (ms) setTimeout(() => btn.textContent = label, ms); };
+  if (mtBusy) return;
+  if (!data) return say("Сначала открой главу");
+  const eng = MT[$("mtEngine").value] || MT.deepl, d0 = data, f0 = file, tab0 = tab;
+  const idx = d0.lines.map((l, i) => i).filter(i => todo(d0.lines[i]) && (d0.lines[i].jp || "").trim());
+  if (!idx.length) return say("Нечего переводить");
+  const chars = idx.reduce((a, i) => a + d0.lines[i].jp.length, 0);
+  const vals = mtKeys(eng); if (!vals) return;
+  if (!confirm(`Перевести ${idx.length} строк главы ${f0} (${chars.toLocaleString("ru")} знаков) через ${eng.name}?\n` +
+    (eng.dayLimit && chars > eng.dayLimit ? `У ${eng.name} лимит ~${eng.dayLimit} знаков в день — переведётся только часть.\n` : "") +
+    `Перевод запишется сразу, с пометкой ⚠ «машинный перевод»: проверь строки фильтром «только ⚠» — сохранённая руками строка пометку теряет.`)) return;
+  const review = "машинный перевод (" + eng.name + ")", upd = {};
+  let err = "";
+  mtBusy = true; btn.disabled = true; $("mtBtn").disabled = true;
+  try {
+    for (let p = 0; p < idx.length; p += eng.batch) {
+      const part = idx.slice(p, p + eng.batch);
+      say(`${eng.name}: ${p} / ${idx.length}…`, 0);
+      let out;
+      try { out = await eng.many(part.map(i => d0.lines[i].jp), mtPrev(d0, part[0]), vals); }
+      catch (e) { err = mtErr(eng, e); break; }
+      part.forEach((i, k) => { const t = (out[k] || "").trim(); if (t) upd[d0.lines[i].key] = t; });
+    }
+    const keys = Object.keys(upd);
+    if (keys.length) {
+      say(`Сохраняю ${keys.length}…`, 0);
+      for (const l of d0.lines) if (l.key in upd) { l.new = upd[l.key]; l.review = review; }
+      if (GIT) {
+        const pd = pending[`imports/${tab0}/${f0}.json`] ||= {};
+        for (const k of keys) pd[k] = {new: upd[k], review};
+        await flush();
+      } else {
+        const r = await (await fetch("/api/upload?tab=" + encodeURIComponent(tab0), {method: "POST",
+          body: JSON.stringify({[f0]: {lines: keys.map(k => ({key: k, new: upd[k], review}))}})})).json();
+        if (!r.ok) throw new Error(r.error);
+      }
+      if (data === d0) { render(); pick(cur); } else markFile();
+    }
+    say((keys.length ? `Переведено ${keys.length} из ${idx.length}` : "Ничего не переведено") + (err ? ` · ${err}` : ""), err ? 8000 : 4000);
+  } catch (e) { say("Ошибка записи: " + (e.message || e), 8000); }
+  finally { mtBusy = false; btn.disabled = false; $("mtBtn").disabled = false; }
 }
 async function oldToNewAll() {         // во все строки главы без перевода — старый перевод (заполненные и пропущенные нарочно не трогаются)
   const btn = $("oldAll"), label = "Старый → мой (вся глава)";
