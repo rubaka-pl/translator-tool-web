@@ -992,10 +992,11 @@ async function mtFetch(name, url, opt) {
   if (r.status === 456) throw new MtError(name + ": лимит на месяц исчерпан");
   throw new MtError(name + ": ошибка " + r.status + (m ? " — " + m.slice(0, 80) : ""));
 }
+if (GIT && !lsGet("deeplProxy")) lsSet("deeplProxy", "https://deepl-proxy.shaitan-perevod.workers.dev");   // свой прокси (tools/deepl-worker.js)
 const MT = {
   deepl: {name: "DeepL",
     keys: [["deeplKey", "Ключ DeepL API (бесплатный — 500 000 знаков в месяц, кончается на :fx).\nВзять: https://www.deepl.com/your-account/keys"]]
-      .concat(GIT ? [["deeplProxy", "Адрес прокси DeepL (Cloudflare Worker из tools/deepl-worker.js), например https://deepl.xxx.workers.dev"]] : []),
+      .concat(GIT ? [["deeplProxy", "Адрес прокси DeepL (Cloudflare Worker из tools/deepl-worker.js), обычно https://deepl-proxy.shaitan-perevod.workers.dev"]] : []),
     async run(jp, prev, [key, proxy]) {
       const tags = MT_TAG().test(jp);
       const params = {text: [tags ? escH(jp).replace(MT_TAG(), m => `<x>${m}</x>`) : jp], source_lang: "JA", target_lang: "RU",
