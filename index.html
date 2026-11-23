@@ -61,6 +61,7 @@
   .mlist { overflow:auto; flex:1; margin:10px 0; border:1px solid var(--line); border-radius:6px; }
   .mrow { display:grid; grid-template-columns:170px 1fr 1.3fr 150px; gap:8px; padding:5px 8px; border-bottom:1px solid var(--line); font-size:12px; white-space:pre-wrap; word-break:break-word; }
   .mrow.bad { background:#ffc93c40; } .mrow span:last-child { color:#c0392b; font-weight:700; } .mrow.head { font-weight:700; color:var(--mute); position:sticky; top:0; background:var(--bg1); }
+  .uiset { padding:4px 10px 8px; } .uiset h3 { margin:10px 0 2px; font-size:13px; color:var(--mute); } .uiset label { display:block; padding:3px 0; font-size:13px; cursor:pointer; }
   .mbtn { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
   .rev { border-bottom:1px solid var(--line); padding:8px; font-size:13px; } .rev .rd { white-space:pre-wrap; font-size:12px; color:var(--mute); margin-top:6px; max-height:260px; overflow:auto; }
   .rstep { margin:6px 0 0; padding-top:6px; border-top:1px dashed var(--line); font-size:12px; } .rstep .why { font-size:11px; color:var(--mute); margin:2px 0 4px; } .rstep button { width:100%; }
@@ -352,6 +353,7 @@
     <span id="st"></span>
     <div id="bar" title="сколько переведено в главе"><i></i></div>
     <select id="theme" title="тема" onchange="setTheme(this.value)"></select>
+    <button id="uiBtn" onclick="uiSettings()" title="настройки: какие кнопки и блоки показывать">⚙</button>
   </div>
   <div id="list"></div>
   <div id="mid"><button id="copyView" onclick="copyView()">Промпт + всё на экране</button> <button id="copy10" class="copyN" onclick="copyN(10, this)">Промпт + 10 строк</button> <button class="copyN" onclick="copyN(30, this)">+ 30</button> <button class="copyN" onclick="copyN(50, this)">+ 50</button> <button class="copyN" onclick="copyN(100, this)">+ 100</button> <button id="copyTodo" onclick="copyTodo()">Промпт + все непереведённые</button> <button id="oldAll" onclick="oldToNewAll()" title="во все пустые строки главы подставить старый перевод">Старый → мой (вся глава)</button> <button id="mtAll" onclick="mtChapter()" title="все строки главы без перевода — машинным переводом (движок выбран у японской строки); пишется сразу, с пометкой ⚠ — проверь фильтром «только ⚠»">🌐 Перевести всю главу</button> <button id="revBtn" onclick="showRevisions()" title="последние 10 состояний главы: посмотреть разницу и откатить">🕓 Ревизии главы</button></div>
@@ -1613,6 +1615,68 @@ async function showRevisions() {
 }
 $("onlyReview").onchange = () => { render(); pick(view[0] ?? -1); };
 
+// ===== Настройки вида: лишние кнопки и блоки можно спрятать (display:none), выбор помнит этот браузер =====
+const UI_BLOCKS = [
+  ["Боковая панель", [
+    ["imp", "Врата Извлечения (импорт игры, только локально)", "#imp"],
+    ["ritual", "🧭 Ритуал: промпты для Claude", "#ritual"],
+    ["sync", "Синхронизировать / отправить в репозиторий", "#syncBtn"],
+    ["glo", "Глоссарий вкладки", "#glo"],
+    ["xfer", "Выгрузка / загрузка", "#xfer"],
+    ["promptBtn", "Скопировать промпт для другой ИИ", "#promptBtn"],
+    ["dlMT", "Скачать всё для перевода моделью (2 кнопки)", 'button[onclick^="downloadForMT"]'],
+    ["dlAll", "Скачать всё ZIP (по файлу на сцену)", 'button[onclick="downloadAllChapters()"]'],
+  ]],
+  ["Верхняя строка", [
+    ["onlyReview", "Фильтр «только ⚠»", "#top label:has(#onlyReview)"],
+    ["q", "Поиск", "#q"],
+    ["st", "Счётчик строк", "#st"],
+    ["bar", "Полоса прогресса главы", "#bar"],
+    ["theme", "Выбор темы", "#theme"],
+  ]],
+  ["Кнопки над редактором", [
+    ["copyView", "Промпт + всё на экране", "#copyView"],
+    ["copyN", "Промпт + 10 / 30 / 50 / 100 строк", ".copyN"],
+    ["copyTodo", "Промпт + все непереведённые", "#copyTodo"],
+    ["oldAll", "Старый → мой (вся глава)", "#oldAll"],
+    ["mtAll", "🌐 Перевести всю главу", "#mtAll"],
+    ["revBtn", "🕓 Ревизии главы", "#revBtn"],
+  ]],
+  ["Редактор строки", [
+    ["jpCopy", "«копировать» у японского", "#ed .src:has(#eJp) button"],
+    ["oldRow", "Строка «Старый» (старый перевод и его кнопки)", "#ed .src:has(#eOld)"],
+    ["mt", "🌐 перевести и выбор движка", "#mtBtn, #mtEngine"],
+    ["move", "← назад / вперёд →", '#ed button[onclick^="move("]'],
+  ]],
+];
+const uiHidden = new Set((() => { try { return JSON.parse(lsGet("uiHidden") || "[]"); } catch (e) { return []; } })());
+const uiStyle = document.head.appendChild(document.createElement("style"));
+function uiApply() {
+  const sel = UI_BLOCKS.flatMap(([, items]) => items).filter(([id]) => uiHidden.has(id)).map(([, , css]) => css);
+  uiStyle.textContent = sel.length ? sel.join(",\n") + " { display:none !important; }" : "";
+  lsSet("uiHidden", uiHidden.size ? JSON.stringify([...uiHidden]) : "");
+}
+uiApply();
+function uiSettings() {
+  const m = modal("Что показывать на странице");
+  m.querySelector(".mbox").style.width = "min(520px, 95vw)";
+  m.querySelector(".msum").textContent = "Сними галочку — кнопка или блок пропадёт. Запоминается в этом браузере, на других устройствах всё как было.";
+  const box = m.querySelector(".mlist"); box.className = "mlist uiset";
+  for (const [group, items] of UI_BLOCKS) {
+    const h = document.createElement("h3"); h.textContent = group; box.appendChild(h);
+    for (const [id, label] of items) {
+      const l = document.createElement("label"), c = document.createElement("input");
+      c.type = "checkbox"; c.checked = !uiHidden.has(id);
+      c.onchange = () => { c.checked ? uiHidden.delete(id) : uiHidden.add(id); uiApply(); };
+      l.append(c, " " + label); box.appendChild(l);
+    }
+  }
+  const all = document.createElement("button"); all.textContent = "Показать всё";
+  all.onclick = () => { uiHidden.clear(); uiApply(); box.querySelectorAll("input").forEach(c => c.checked = true); };
+  const close = document.createElement("button"); close.textContent = "Закрыть"; close.onclick = () => m.remove();
+  m.querySelector(".mbtn").append(all, close);
+  m.onclick = e => { if (e.target === m) m.remove(); };
+}
 // ===== Ритуал: промпты для Claude Code по шагам =====
 function ritualCtx() {
   return `Проект: любительский перевод визуальной новеллы «${tab}» с японского на русский.\n` +
