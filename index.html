@@ -1523,7 +1523,7 @@ async function applyPlan(plan, mode) {
           const before = JSON.parse(JSON.stringify(d)), map = new Map(d.lines.map(l => [String(l.key), l]));
           n = rv = 0;
           for (const x of ch) {
-            const l = map.get(x.key); if (!l || l.skip || (!x.edit && l.new && !badNew(l))) continue;
+            const l = map.get(x.key); if (!l || l.skip || (!x.edit && ready(l))) continue;
             l.new = x.now; if (x.flags.length) { l.review = x.flags.join(", "); rv++; } else delete l.review; n++;
           }
           if (!n) break;
