@@ -36,6 +36,7 @@
   #files div.all { font-weight:800; }
   #files div.all::before { content:""; }
   #files div.ok { color:var(--mute); opacity:.65; }
+  #files div.mt, #files div.ok.mt { background:#ffc93c55; opacity:1; } #files div.mt .nm::after { content:" ⚙"; color:#d35400; }
   #files div[data-f] { display:flex; align-items:center; gap:4px; }
   #files div .nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   #files div .dl { flex:none; padding:0 7px; line-height:22px; border-radius:7px; background:var(--acc); color:#fff !important; font-weight:800; font-size:13px; opacity:.85; }
@@ -440,7 +441,7 @@ async function flush() {                // отправляет накоплен
         if (r.ok) {
           done = true; if (pending[path] === edits) delete pending[path];
           const f = path.split("/").pop().replace(/\.json$/, "");
-          if (path === dataPath(f)) { tabStats.left[f] = d.lines.filter(l => todo(l, d)).length; tabStats.total[f] = d.lines.length; saveStatsSoon(); }
+          if (path === dataPath(f)) { setStat(f, d); saveStatsSoon(); }
         }
         else if (r.status !== 409 && r.status !== 422) throw new Error("GitHub ответил " + r.status);
       }
@@ -458,13 +459,15 @@ async function saveStats() {            // счётчики глав (серая
   for (let n = 0; n < 3; n++) {
     let sha = null, cur = {}; try { const r = await ghRead(path); sha = r.sha; cur = r.data; } catch (e) {}
     const have = new Set(allFiles), only = o => Object.fromEntries(Object.entries(o).filter(([k]) => have.has(k)));
-    const st = {left: only({...(cur.left || {}), ...tabStats.left}), total: only({...(cur.total || {}), ...tabStats.total})};
-    if (JSON.stringify(st) === JSON.stringify({left: cur.left || {}, total: cur.total || {}})) return;
+    const st = {left: only({...(cur.left || {}), ...tabStats.left}), total: only({...(cur.total || {}), ...tabStats.total}), mt: only({...(cur.mt || {}), ...tabStats.mt})};
+    if (JSON.stringify(st) === JSON.stringify({left: cur.left || {}, total: cur.total || {}, mt: cur.mt || {}})) return;
     const r = await ghWrite(path, st, sha, "Счётчики глав: " + tab);
     if (r.ok || (r.status !== 409 && r.status !== 422)) return;
   }
 }
-function paintFiles() { for (const el of $("files").children) if (el.dataset.f) el.classList.toggle("ok", tabStats.left[el.dataset.f] === 0); }
+const isMT = l => !!l.new && String(l.review || "").startsWith("машинный перевод");   // кнопкой, ещё не сохранено руками
+function setStat(f, d) { setStat(f, d); tabStats.mt[f] = d.lines.filter(isMT).length; }
+function paintFiles() { for (const el of $("files").children) if (el.dataset.f) { el.classList.toggle("ok", tabStats.left[el.dataset.f] === 0); el.classList.toggle("mt", tabStats.mt[el.dataset.f] > 0); } }
 window.addEventListener("beforeunload", e => { if (Object.keys(pending).length) { e.preventDefault(); e.returnValue = ""; } });
 async function syncNow() {
   if (GIT) return flush();
@@ -480,7 +483,7 @@ async function gitFiles() {
   const files = (await ghList("imports/" + tab)).filter(x => x.name.endsWith(".json")).map(x => x.name.slice(0, -5));
   let st = {}; try { st = (await ghRead("stats/" + tab + ".json")).data; } catch (e) {}   // {left, total} по главам (пишет выгрузка)
   const have = new Set(files), only = o => Object.fromEntries(Object.entries(o || {}).filter(([k]) => have.has(k)));   // записи про главы, которых уже нет (переименованы), не считаем
-  return {tabs, hidden, files, left: only(st.left || st), total: only(st.total), dir: DATA_REPO + "/imports/" + tab};
+  return {tabs, hidden, files, left: only(st.left || st), total: only(st.total), mt: only(st.mt), dir: DATA_REPO + "/imports/" + tab};
 }
 async function loadData(f) {
   if (!GIT) return (await fetch("/api/file/" + encodeURIComponent(f) + "?tab=" + encodeURIComponent(tab))).json();
@@ -561,7 +564,7 @@ async function gitUpload(f) {
         if (!r.ok) { skipped.push(`${name} (GitHub ответил ${r.status})`); continue; }
         delete cache[name];             // sha изменился: если в эту главу придёт ещё часть, прочитаем заново
       }
-      tabStats.left[name] = d.lines.filter(l => todo(l, d)).length; tabStats.total[name] = d.lines.length;
+      setStat(name, d);
       files.push({...st, file: name}); for (const k in total) total[k] += st[k];
     } catch (e) { skipped.push(`${name} (${e.message || e})`); }
   }
@@ -774,7 +777,7 @@ async function loadFiles() {
   $("dir").textContent = r.dir;
   if (tab) loadGloss();
   $("files").innerHTML = "";
-  allFiles = r.files; tabStats = {left: {...(r.left || {})}, total: {...(r.total || {})}}; showAll = false;
+  allFiles = r.files; tabStats = {left: {...(r.left || {})}, total: {...(r.total || {})}, mt: {...(r.mt || {})}}; showAll = false;
   const a = document.createElement("div"); a.className = "all"; a.id = "allProg"; a.onclick = () => openAll(a);
   $("files").appendChild(a); updAll();
   for (const f of r.files) {
@@ -786,6 +789,7 @@ async function loadFiles() {
     up.onclick = e => { e.stopPropagation(); uploadChapter(f); };
     d.appendChild(dl); d.appendChild(up);
     if (r.left && r.left[f] === 0) d.classList.add("ok");          // переводить нечего — серая
+    if (r.mt && r.mt[f] > 0) d.classList.add("mt");               // есть непроверенный машинный перевод — жёлтая
     $("files").appendChild(d);
   }
 }
@@ -845,15 +849,15 @@ async function doUpload() {
 }
 function markFile() {                  // открытая глава: серая, если в ней не осталось строк без перевода
   const el = [...$("files").children].find(x => x.dataset.f === file);
-  if (el && data) el.classList.toggle("ok", !data.lines.some(todo));
+  if (el && data) { el.classList.toggle("ok", !data.lines.some(todo)); el.classList.toggle("mt", data.lines.some(isMT)); }
   if (data && file) {
-    const left = data.lines.filter(todo).length, was = tabStats.left[file];
-    tabStats.left[file] = left; tabStats.total[file] = data.lines.length; updAll();
-    if (was !== left && !pending[dataPath(file)]) saveStatsSoon();   // счётчик в репозитории устарел (правки сохранит flush)
+    const left = data.lines.filter(todo).length, was = tabStats.left[file], wasMT = tabStats.mt[file] || 0;
+    tabStats.left[file] = left; tabStats.total[file] = data.lines.length; tabStats.mt[file] = data.lines.filter(isMT).length; updAll();
+    if ((was !== left || wasMT !== tabStats.mt[file]) && !pending[dataPath(file)]) saveStatsSoon();   // счётчик в репозитории устарел (правки сохранит flush)
   }
 }
 // ---- общий прогресс вкладки: по счётчикам глав (stats), открытая глава — по живым данным ----
-let tabStats = {left: {}, total: {}}, showAll = false, allFiles = [];
+let tabStats = {left: {}, total: {}, mt: {}}, showAll = false, allFiles = [];
 function allNums() {
   const fs = Object.keys(tabStats.total); if (!fs.length) return null;
   const n = fs.reduce((a, f) => a + tabStats.total[f], 0), left = fs.reduce((a, f) => a + (tabStats.left[f] || 0), 0);
@@ -873,7 +877,7 @@ async function openAll(el) {
   $("list").innerHTML = `<div class="row grp"><span>Загружаю главы с непереведёнными: ${fs.length}…</span></div>`;
   allData = [];
   for (const f of fs) { try { allData.push({file: f, doc: await loadData(f)}); } catch (e) {} }
-  for (const {file: f, doc} of allData) { tabStats.left[f] = doc.lines.filter(l => todo(l, doc)).length; tabStats.total[f] = doc.lines.length; }
+  for (const {file: f, doc} of allData) { setStat(f, doc); }
   paintFiles(); saveStatsSoon();
   updAll();                             // счётчики могли устареть (допереводили после выгрузки) — по живым данным
   if (showAll) renderAll();
@@ -914,7 +918,6 @@ async function openFile(f, el) {
   document.querySelectorAll("#files div").forEach(x => x.classList.remove("on")); el.classList.add("on");
   file = f; data = await loadData(f); render(); pick(view[0] ?? -1);
 }
-const isMT = l => !!l.new && String(l.review || "").startsWith("машинный перевод");
 function render() {
   if (showAll) return renderAll();
   if (!data) return;
@@ -1513,7 +1516,7 @@ async function applyPlan(plan, mode) {
           if (!n) break;
           if (!t) await saveRevision(c.name, before, "перед загрузкой");
           const r = await ghWrite(dataPath(c.name), d, sha, "Загрузка перевода: " + c.name);
-          if (r.ok) { tabStats.left[c.name] = d.lines.filter(l => todo(l, d)).length; tabStats.total[c.name] = d.lines.length; break; }
+          if (r.ok) { setStat(c.name, d); break; }
           if ((r.status !== 409 && r.status !== 422) || t >= 2) throw new Error("GitHub ответил " + r.status);
         }
       } else {
@@ -1583,7 +1586,7 @@ async function restoreRevision(name, rev, doc) {
     for (const l of d.lines) { const o = old.get(String(l.key)); if (!o) continue; l.new = o.new || ""; if (o.review) l.review = o.review; else delete l.review; }
     const r = await ghWrite(dataPath(name), d, sha, "Откат к ревизии: " + name);
     if (!r.ok) throw new Error("GitHub ответил " + r.status);
-    tabStats.left[name] = d.lines.filter(l => todo(l, d)).length; tabStats.total[name] = d.lines.length; paintFiles(); updAll(); saveStatsSoon();
+    setStat(name, d); paintFiles(); updAll(); saveStatsSoon();
   } else {
     const r = await (await fetch(`/api/restore?tab=${encodeURIComponent(tab)}&file=${encodeURIComponent(name)}&id=${encodeURIComponent(rev.id)}`, {method: "POST", body: "{}"})).json();
     if (!r.ok) throw new Error(r.error || "не вышло");
