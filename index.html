@@ -467,7 +467,7 @@ async function saveStats() {            // счётчики глав (серая
 }
 const isMT = l => !!l.new && String(l.review || "").startsWith("машинный перевод");   // кнопкой, ещё не сохранено руками
 const ready = l => !!l.new && !badNew(l) && !isMT(l);   // готовый перевод: загрузка его не трогает, выгрузки «для перевода» не берут
-function setStat(f, d) { setStat(f, d); tabStats.mt[f] = d.lines.filter(isMT).length; }
+function setStat(f, d) { tabStats.left[f] = d.lines.filter(l => todo(l, d)).length; tabStats.total[f] = d.lines.length; tabStats.mt[f] = d.lines.filter(isMT).length; }
 function paintFiles() { for (const el of $("files").children) if (el.dataset.f) { el.classList.toggle("ok", tabStats.left[el.dataset.f] === 0); el.classList.toggle("mt", tabStats.mt[el.dataset.f] > 0); } }
 window.addEventListener("beforeunload", e => { if (Object.keys(pending).length) { e.preventDefault(); e.returnValue = ""; } });
 async function syncNow() {
