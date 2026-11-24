@@ -349,6 +349,7 @@
   <div id="top">
     <label><input type="checkbox" id="onlyTodo" checked> только без перевода</label>
     <label title="строки, которые загрузка пометила как подозрительные: проверь и сохрани вручную"><input type="checkbox" id="onlyReview"> только ⚠</label>
+    <label title="строки, переведённые кнопкой машинного перевода и ещё не сохранённые руками"><input type="checkbox" id="onlyMT"> машинный перевод</label>
     <input id="q" placeholder="поиск…" style="padding:4px 6px">
     <span id="st"></span>
     <div id="bar" title="сколько переведено в главе"><i></i></div>
@@ -913,13 +914,15 @@ async function openFile(f, el) {
   document.querySelectorAll("#files div").forEach(x => x.classList.remove("on")); el.classList.add("on");
   file = f; data = await loadData(f); render(); pick(view[0] ?? -1);
 }
+const isMT = l => !!l.new && String(l.review || "").startsWith("машинный перевод");
 function render() {
   if (showAll) return renderAll();
   if (!data) return;
   const q = $("q").value.toLowerCase();
   view = data.lines.map((l, i) => i).filter(i => {
     const l = data.lines[i];
-    if ($("onlyReview").checked) { if (!l.review) return false; }
+    if ($("onlyMT").checked) { if (!isMT(l)) return false; }
+    else if ($("onlyReview").checked) { if (!l.review) return false; }
     else if ($("onlyTodo").checked && !todo(l)) return false;
     return !q || [l.key, l.spk, l.jp, l.old, l.new].join(" ").toLowerCase().includes(q);
   });
@@ -1614,6 +1617,7 @@ async function showRevisions() {
   }
 }
 $("onlyReview").onchange = () => { render(); pick(view[0] ?? -1); };
+$("onlyMT").onchange = () => { render(); pick(view[0] ?? -1); };
 
 // ===== Настройки вида: лишние кнопки и блоки можно спрятать (display:none), выбор помнит этот браузер =====
 const UI_BLOCKS = [
@@ -1629,6 +1633,7 @@ const UI_BLOCKS = [
   ]],
   ["Верхняя строка", [
     ["onlyReview", "Фильтр «только ⚠»", "#top label:has(#onlyReview)"],
+    ["onlyMT", "Фильтр «машинный перевод»", "#top label:has(#onlyMT)"],
     ["q", "Поиск", "#q"],
     ["st", "Счётчик строк", "#st"],
     ["bar", "Полоса прогресса главы", "#bar"],
