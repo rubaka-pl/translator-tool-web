@@ -345,7 +345,7 @@
   <button id="upGo" style="width:100%;margin-top:4px" onclick="doUpload()">Загрузить перевод</button>
   <div style="font-size:11px;color:#777;margin-top:4px">Вставь текст или выбери ZIP / .json / .txt (можно несколько, в том числе главы, скачанные кнопкой ⬇ у главы). Строки сами разложатся по главам по ключам, открывать главу не нужно. Заполненные (зелёные) строки не трогаются.</div>
   <pre id="upLog" style="white-space:pre-wrap;font-size:11px;color:#555;max-height:140px;overflow:auto;margin:4px 0 0"></pre></div></details>
-  <h1>Файлы</h1><div id="files"></div><div style="padding:8px 12px;border-top:1px solid #eee"><button id="promptBtn" style="width:100%" onclick="copyPrompt()">Скопировать промпт для другой ИИ</button><button style="width:100%;margin-top:6px" onclick="downloadForMT()" title="Непереведённые строки вкладки (без «пропущено нарочно»), глоссарий, программа для LM Studio / Ollama и инструкция — одним архивом">Скачать всё для перевода моделью (ZIP)</button><button style="width:100%;margin-top:6px" onclick="downloadForMT(true)" title="То же самое, но модель перед переводом думает (thinking включён): медленнее, иногда точнее. В settings.txt think=yes, предел ответа больше">Скачать всё для перевода моделью — с размышлениями (ZIP)</button><button style="width:100%;margin-top:6px" onclick="downloadAllChapters()" title="По текстовому файлу на каждый файл вкладки: только непереведённые строки (без «пропущено нарочно»), формат как у кнопки ⬇ главы — перевод вписывается после «ru:», файлы загружаются обратно кнопкой «Загрузить перевод»">Скачать всё ZIP (по файлу на сцену)</button><div id="mtLog" style="font-size:11px;color:#888;margin-top:4px"></div></div><div id="dir"style="padding:8px 12px;color:#999;font-size:11px"></div></div>
+  <h1>Файлы</h1><div id="files"></div><div style="padding:8px 12px;border-top:1px solid #eee"><button id="promptBtn" style="width:100%" onclick="copyPrompt()">Скопировать промпт для другой ИИ</button><button style="width:100%;margin-top:6px" onclick="downloadForMT()" title="Непереведённые строки вкладки (без «пропущено нарочно»), глоссарий, программа для LM Studio / Ollama и инструкция — одним архивом">Скачать всё для перевода моделью (ZIP)</button><button style="width:100%;margin-top:6px" onclick="downloadForMT(true)" title="То же самое, но модель перед переводом думает (thinking включён): медленнее, иногда точнее. В settings.txt think=yes, предел ответа больше">Скачать всё для перевода моделью — с размышлениями (ZIP)</button><button style="width:100%;margin-top:6px" onclick="downloadAllChapters()" title="По текстовому файлу на каждый файл вкладки: только непереведённые строки (без «пропущено нарочно»), формат как у кнопки ⬇ главы — перевод вписывается после «ru:», файлы загружаются обратно кнопкой «Загрузить перевод»">Скачать всё ZIP (по файлу на сцену)</button><button style="width:100%;margin-top:6px" onclick="downloadWholeTab()" title="Для редактора: весь перевод вкладки одним .txt — все главы и все строки (японский, перевод). Правится в блокноте, место из игры ищется Ctrl+F по русскому тексту; готовый файл грузится обратно кнопкой «Загрузить перевод», правки покажутся с ⚠ «было → стало»">Скачать весь перевод одним файлом (для редактора)</button><div id="mtLog" style="font-size:11px;color:#888;margin-top:4px"></div></div><div id="dir"style="padding:8px 12px;color:#999;font-size:11px"></div></div>
 <div id="main">
   <div id="top">
     <label><input type="checkbox" id="onlyTodo" checked> только без перевода</label>
@@ -733,6 +733,47 @@ async function downloadAllChapters() {
     log(`Готово: ${n} строк в ${m} файлах`);
   } catch (e) { log("Ошибка: " + (e.message || e)); }
 }
+async function downloadWholeTab() {     // редактору: все главы и все строки одним .txt; обратно — «Загрузить перевод»
+  const log = m => { $("mtLog").textContent = m; };
+  try {
+    if (GIT) await flush();
+    const r = GIT ? null : await (await fetch("/api/files?tab=" + encodeURIComponent(tab))).json();
+    const files = GIT ? (await ghList("imports/" + tab)).filter(x => x.name.endsWith(".json")).map(x => x.name.slice(0, -5)).sort() : r.files;
+    const ind = t => String(t || "").replace(/\r?\n/g, "\n    ");
+    const out = ["\uFEFF# Весь перевод вкладки " + tab + " · глав " + files.length + " · " + new Date().toLocaleString("ru"),
+      "# Правь только текст после «ru:» (можно в несколько строк). Строки @@, who, jp, old и #chapter не меняй и не удаляй.",
+      "# Найти место из игры: Ctrl+F по куску русского текста (или японского). Пустое «ru:» — строка ещё без перевода.",
+      "# Готово — отправь файл переводчику: он загрузит его кнопкой «Загрузить перевод», правки покажутся с ⚠ «было → стало».", ""];
+    let n = 0;
+    for (const [i, f] of files.entries()) {
+      log(`Собираю… ${i + 1} / ${files.length}`);
+      const d = await loadData(f);
+      out.push(CH_MARK + f, "# ======== глава " + f + " ========", "");
+      for (const l of d.lines) {
+        out.push("@@ " + l.key);
+        if (l.spk) out.push("who: " + l.spk);
+        out.push("jp: " + ind(l.jp));
+        if (l.old && l.old !== l.new) out.push("old: " + ind(l.old));
+        if (l.skip) out.push("# пропущено нарочно");
+        out.push("ru: " + (l.new || ""), "");
+        n++;
+      }
+    }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([out.join("\r\n")], {type: "text/plain;charset=utf-8"}));
+    a.download = `${tab} - весь перевод.txt`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    log(`Готово: ${n} строк в ${files.length} главах`);
+  } catch (e) { log("Ошибка: " + (e.message || e)); }
+}
+function splitChapters(t) {             // файл «весь перевод» -> куски по главам (каждый начинается с #chapter)
+  const lines = t.replace(/^\uFEFF/, "").split(/\r?\n/), parts = []; let cur = null;
+  for (const raw of lines) {
+    if (raw.startsWith(CH_MARK)) { cur = [raw]; parts.push(cur); continue; }
+    if (cur) cur.push(raw);
+  }
+  return parts.map(p => parseChapterTxt(p.join("\n")));
+}
+const manyChapters = t => (t.match(new RegExp("^" + CH_MARK, "gm")) || []).length > 1;
 let UP_FILES = null, UP_CHAPTER = "";      // загрузка кнопкой ⬆ у главы: файлы мимо поля «Загрузить перевод»
 function uploadChapter(f) {
   const i = document.createElement("input"); i.type = "file"; i.accept = ".txt"; i.multiple = true;
@@ -1392,7 +1433,7 @@ function modal(title) {
 }
 async function readParts() {            // [[имя главы или "", содержимое]]
   const fs = UP_FILES || [...$("upFile").files], txt = UP_FILES ? "" : $("upText").value.trim();
-  if (txt) return [isChapterTxt(txt) ? parseChapterTxt(txt) : ["", parseLoose(txt)]];
+  if (txt) return manyChapters(txt) ? splitChapters(txt) : [isChapterTxt(txt) ? parseChapterTxt(txt) : ["", parseLoose(txt)]];
   if (!fs.length) return null;
   const parts = [];
   for (const f0 of fs) {
@@ -1405,6 +1446,7 @@ async function readParts() {            // [[имя главы или "", сод
       continue;
     }
     const t = await f0.text();
+    if (manyChapters(t)) { parts.push(...splitChapters(t)); continue; }
     const part = isChapterTxt(t) ? parseChapterTxt(t) : ["", parseLoose(t)];
     if (!part[0] && UP_CHAPTER) part[0] = UP_CHAPTER;      // без строки #chapter — в ту главу, у которой нажали ⬆
     parts.push(part);
