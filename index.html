@@ -466,6 +466,7 @@ async function saveStats() {            // счётчики глав (серая
   }
 }
 const isMT = l => !!l.new && String(l.review || "").startsWith("машинный перевод");   // кнопкой, ещё не сохранено руками
+const ready = l => !!l.new && !badNew(l) && !isMT(l);   // готовый перевод: загрузка его не трогает, выгрузки «для перевода» не берут
 function setStat(f, d) { setStat(f, d); tabStats.mt[f] = d.lines.filter(isMT).length; }
 function paintFiles() { for (const el of $("files").children) if (el.dataset.f) { el.classList.toggle("ok", tabStats.left[el.dataset.f] === 0); el.classList.toggle("mt", tabStats.mt[el.dataset.f] > 0); } }
 window.addEventListener("beforeunload", e => { if (Object.keys(pending).length) { e.preventDefault(); e.returnValue = ""; } });
@@ -501,8 +502,8 @@ function mergeLocal(d, inc) {           // те же правила, что на
     else if (l.skip) st.kept++;           // «пропущено нарочно» загрузка не заполняет
     else if (typeof v !== "string" || !v.trim()) st.empty++;
     else if ((l.new || "") === v.trim().slice(0, 5000)) st.same++;
-    else if (l.new && !badNew(l)) st.kept++;
-    else { l.new = v.trim().slice(0, 5000); st.set++; }
+    else if (ready(l)) st.kept++;
+    else { l.new = v.trim().slice(0, 5000); delete l.review; st.set++; }
   }
   return st;
 }
@@ -609,7 +610,7 @@ async function downloadForMT(think = false) {
     const scenes = []; let n = 0;
     for (const f of files) {
       const d = (await ghRead("imports/" + tab + "/" + f)).data;
-      const lines = d.lines.filter(l => !l.skip && !l.mine && !(l.new && !badNew(l)))
+      const lines = d.lines.filter(l => !l.skip && !l.mine && !ready(l))
         .map(l => ({key: l.key, spk: l.spk || "", spk_ru: l.spk || "", jp: l.jp}));
       if (lines.length) { scenes.push({scene: d.file || f.replace(/\.json$/, ""), lines}); n += lines.length; }
       log(`Собираю строки… ${f}`);
@@ -709,7 +710,7 @@ async function downloadAllChapters() {
     for (const f of files) {
       log("Собираю… " + f);
       const d = await loadData(f);
-      const lines = d.lines.filter(l => !l.skip && !l.mine && !(l.new && !badNew(l)));
+      const lines = d.lines.filter(l => !l.skip && !l.mine && !ready(l));
       if (!lines.length) continue;
       const out = ["\uFEFF# Глава " + f + " · вкладка " + tab,
         "# Перевод пиши после «ru:» (можно в несколько строк). Строки @@, who, jp не меняй, они для справки.",
@@ -1469,8 +1470,8 @@ async function buildPlan(parts) {       // ничего не пишет: тол�
         if (!v) { cnt.empty++; continue; }
         if ((l.new || "") === v) { cnt.same++; continue; }
         // готовое и «пропущено нарочно» — только руками; из главы-текста (⬇) готовое можно поправить, но с ⚠
-        const fix = it.edit && !l.skip && l.new && !badNew(l);
-        if (!fix && (l.skip || (l.new && !badNew(l)))) { cnt.kept++; continue; }
+        const fix = it.edit && !l.skip && ready(l);
+        if (!fix && (l.skip || ready(l))) { cnt.kept++; continue; }
         if (seen.has(k)) continue; seen.add(k);
         const flags = suspicious(l.jp, v); if (fix) flags.unshift("правка готовой строки");
         changes.push({key: k, jp: l.jp || "", was: l.new || "", now: v, flags, edit: !!fix});
