@@ -1048,7 +1048,19 @@ function mtKeys(eng, reset) {          // ключи движка: из брау
   for (const [k, msg] of eng.keys) { const v = (!reset && lsGet(k)) || askLs(k, msg); if (!v) return null; vals.push(v); }
   return vals;
 }
-const mtPrev = (d, at) => d.lines.slice(Math.max(0, at - 3), at).map(x => (x.spk ? x.spk + ": " : "") + (x.jp || "")).join("\n");
+// контекст для DeepL (поле context не оплачивается): реплики до пачки, сама пачка и пара после, не длиннее MT_CTX знаков
+const MT_CTX = 4000;
+function mtPrev(d, at, n = 1) {
+  const fmt = x => (x.spk ? x.spk + ": " : "") + (x.jp || "");
+  const mid = d.lines.slice(at, at + n + 2).map(fmt).join("\n");
+  let before = "";
+  for (let i = at - 1; i >= 0; i--) {
+    const s = fmt(d.lines[i]) + "\n" + before;
+    if (s.length + mid.length > MT_CTX) break;
+    before = s;
+  }
+  return (before + mid).slice(0, MT_CTX);
+}
 const mtErr = (eng, e) => { if (e.badKey && eng.keys.length) lsSet(eng.keys[0][0], ""); return e instanceof MtError ? e.message : eng.name + ": непонятный ответ"; };
 async function mt(reset) {             // одна строка -> в поле «Мой перевод» (не сохраняет: поправь и Enter)
   if (cur < 0 || !data || mtBusy) return;
@@ -1086,7 +1098,7 @@ async function mtChapter() {           // все строки главы без 
       const part = idx.slice(p, p + eng.batch);
       say(`${eng.name}: ${p} / ${idx.length}…`, 0);
       let out;
-      try { out = await eng.many(part.map(i => d0.lines[i].jp), mtPrev(d0, part[0]), vals); }
+      try { out = await eng.many(part.map(i => d0.lines[i].jp), mtPrev(d0, part[0], part[part.length - 1] - part[0] + 1), vals); }
       catch (e) { err = mtErr(eng, e); break; }
       part.forEach((i, k) => { const t = (out[k] || "").trim(); if (t) upd[d0.lines[i].key] = t; });
     }
