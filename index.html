@@ -137,6 +137,25 @@
   :root[data-theme="dsbm"] textarea, :root[data-theme="dsbm"] input:not([type=checkbox]):not([type=file]) { border-radius:0; border-color:#2e2e2e; background:#0c0c0c; font-family:"Old Standard TT", serif; }
   :root[data-theme="dsbm"] textarea:focus, :root[data-theme="dsbm"] input:focus { border-color:#777; box-shadow:0 0 12px #ffffff10; }
   :root[data-theme="dsbm"] .row { border-radius:0; margin:0; border-bottom:1px solid #1b1b1b; }
+  /* индикаторы загрузки: полоска сверху, значок в верхней строке, спиннер на кнопке, скелетоны списков */
+  #busyBar { position:fixed; top:0; left:0; right:0; height:3px; z-index:60; pointer-events:none; opacity:0; transition:opacity .2s; overflow:hidden; }
+  #busyBar.on { opacity:1; }
+  #busyBar::before { content:""; position:absolute; top:0; bottom:0; width:40%; left:-40%; background:linear-gradient(90deg, transparent, var(--acc), var(--acc2), transparent); animation:busyMove 1.1s ease-in-out infinite; }
+  @keyframes busyMove { to { left:100%; } }
+  #busyBadge { display:none; align-items:center; gap:6px; font-size:12px; color:var(--mute); white-space:nowrap; }
+  #busyBadge.on { display:inline-flex; }
+  .spin { display:inline-block; width:14px; height:14px; border:2px solid var(--line); border-top-color:var(--acc); border-radius:50%; animation:spin .7s linear infinite; vertical-align:-2px; flex:none; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  button.loading { cursor:progress; }
+  button.loading::after { content:""; display:inline-block; width:11px; height:11px; margin-left:8px; border:2px solid currentColor; border-top-color:transparent; border-radius:50%; animation:spin .7s linear infinite; vertical-align:-1px; }
+  .skel { position:relative; overflow:hidden; display:block; height:13px; margin:5px 0; border-radius:7px; background:var(--line); opacity:.6; }
+  .skel::after { content:""; position:absolute; inset:0; transform:translateX(-100%); background:linear-gradient(90deg, transparent, #ffffff70, transparent); animation:shimmer 1.2s infinite; }
+  @keyframes shimmer { to { transform:translateX(100%); } }
+  .row.sk { cursor:default; pointer-events:none; background:transparent; }
+  .row.sk:hover { transform:none; box-shadow:none; }
+  #files div.sk { cursor:default; pointer-events:none; padding:9px 12px; }
+  #files div.sk::before { content:none !important; }
+  @media (prefers-reduced-motion: reduce) { .spin, button.loading::after, .skel::after, #busyBar::before { animation-duration:3s; } }
   :root[data-theme="dsbm"] .row:hover { box-shadow:none; background:#1c1c1c; }
   :root[data-theme="dsbm"] .row.on { outline:1px solid #8c8780; box-shadow:none; }
   :root[data-theme="dsbm"] .row.done .k::after { content:" †"; color:#7d8a7d; }
@@ -354,6 +373,7 @@
     <input id="q" placeholder="поиск…" style="padding:4px 6px">
     <label title="искать по всем главам вкладки (по ключу, имени, японскому и обоим переводам); клик по строке открывает главу на ней"><input type="checkbox" id="qAll"> во всех главах</label>
     <span id="st"></span>
+    <span id="busyBadge" title="идёт загрузка или отправка"><i class="spin"></i>загрузка…</span>
     <div id="bar" title="сколько переведено в главе"><i></i></div>
     <select id="theme" title="тема" onchange="setTheme(this.value)"></select>
     <button id="uiBtn" onclick="uiSettings()" title="настройки: какие кнопки и блоки показывать">⚙</button>
@@ -370,7 +390,43 @@
     <button id="mtBtn" onclick="mt(event.shiftKey)" title="машинный перевод выбранным движком в поле «Мой перевод» (не сохраняет: поправь и Enter). Alt+Enter в поле — то же. Shift+клик — сменить ключ движка">🌐 перевести</button> <select id="mtEngine" title="движок машинного перевода (и для «Перевести всю главу»)" onchange="lsSet('mtEngine', this.value)"><option value="deepl">DeepL</option><option value="google">Google</option><option value="ms">Microsoft</option><option value="mymemory">MyMemory (без ключа)</option></select>
   </div>
 </div>
+<div id="busyBar"></div>
 <script>
+// ---- индикаторы загрузки: любой fetch включает полоску сверху и значок «загрузка…»; нажатая перед этим кнопка крутит спиннер
+const busy = {n: 0, t: null, btn: null, btnAt: 0, cur: null};
+{ const f0 = window.fetch.bind(window);
+  window.fetch = (...a) => { busyInc(); return f0(...a).finally(busyDec); }; }
+function busyInc() {
+  busy.n++;
+  if (busy.btn && Date.now() - busy.btnAt < 800) { busy.cur?.classList.remove("loading"); busy.cur = busy.btn; busy.cur.classList.add("loading"); busy.btn = null; }
+  clearTimeout(busy.t); busy.t = setTimeout(busyPaint, 120);
+}
+function busyDec() { busy.n = Math.max(0, busy.n - 1); clearTimeout(busy.t); busy.t = setTimeout(busyPaint, busy.n ? 120 : 250); }
+function busyPaint() {
+  const on = busy.n > 0, bar = document.getElementById("busyBar"), badge = document.getElementById("busyBadge");
+  bar?.classList.toggle("on", on); badge?.classList.toggle("on", on);
+  if (!on && busy.cur) { busy.cur.classList.remove("loading"); busy.cur = null; }
+}
+document.addEventListener("click", e => { const b = e.target.closest && e.target.closest("button"); if (b) { busy.btn = b; busy.btnAt = Date.now(); } }, true);
+function skelRows(n, msg) {             // заготовка списка строк, пока грузится глава / вкладка / поиск
+  const box = document.getElementById("list"); box.innerHTML = "";
+  if (msg) { const g = document.createElement("div"); g.className = "row grp"; g.innerHTML = `<span><i class="spin"></i> <b id="skMsg"></b></span>`; box.appendChild(g); g.querySelector("#skMsg").textContent = msg; }
+  const W = [[70, 0], [60, 0], [92, 64], [78, 50], [85, 58]];
+  for (let k = 0; k < n; k++) {
+    const r = document.createElement("div"); r.className = "row sk";
+    r.innerHTML = W.map(([a, b], j) => `<span><i class="skel" style="width:${a - (k * 11 + j * 7) % 22}%"></i>${b ? `<i class="skel" style="width:${b - (k * 5 + j * 3) % 18}%"></i>` : ""}</span>`).join("");
+    box.appendChild(r);
+  }
+}
+function busyLog(id, m) {              // текст прогресса; пока он кончается на «…» — со спиннером
+  const el = document.getElementById(id); if (!el) return;
+  el.textContent = m; if (/…$/.test(m)) el.prepend(Object.assign(document.createElement("i"), {className: "spin"}), " ");
+}
+function skelMsg(msg) { const m = document.getElementById("skMsg"); if (m) m.textContent = msg; else skelRows(8, msg); }
+function skelFiles(n = 14) {            // заготовка списка глав, пока грузится вкладка
+  const box = document.getElementById("files"); box.innerHTML = "";
+  for (let k = 0; k < n; k++) { const d = document.createElement("div"); d.className = "sk"; d.innerHTML = `<i class="skel" style="width:${50 + (k * 17) % 42}%"></i>`; box.appendChild(d); }
+}
 const JP = /[぀-ヺー-ヿ㐀-䶿一-鿿]/;      // без «・» (U+30FB): им начинаются пункты списков и в переводе
 let tab = "", file = null, data = null, view = [], cur = -1;
 // «готовые» закрыты паролем: в странице только его SHA-256, после верного ввода браузер помнит хэш
@@ -602,7 +658,7 @@ const MT_GAME = {
     "Короткие рубленые фразы автора сохраняй, нарочные повторы для смеха — тоже."
 };
 async function downloadForMT(think = false) {
-  const log = m => { $("mtLog").textContent = m; };
+  const log = m => busyLog("mtLog", m);
   if (!GIT) { log("Только в онлайн-версии"); return; }
   try {
     await flush();
@@ -647,7 +703,7 @@ async function downloadForMT(think = false) {
 // ---- глоссарий вкладки: glossary/<вкладка>.json, в репозитории; уходит в промпт ----
 const glossPath = () => `glossary/${tab}.json`;
 async function loadGloss() {
-  let text = "";
+  let text = ""; busyLog("glossSt", "загружаю глоссарий…");
   try {
     if (GIT) { const r = await ghApi(glossPath()); if (r.ok) text = JSON.parse(b64text((await r.json()).content)).text || ""; }
     else text = (await (await fetch("/api/glossary?tab=" + encodeURIComponent(tab))).json()).text || "";
@@ -701,7 +757,7 @@ const ALLCH_README = `По файлу на сцену. В каждом — то�
 3. На сайте: «Выгрузка / загрузка» -> выбрать файлы (можно сразу много или весь ZIP) -> «Загрузить перевод».
    Пустые строки заполнятся, готовые заменятся новым переводом (с ⚠).`;
 async function downloadAllChapters() {
-  const log = m => { $("mtLog").textContent = m; };
+  const log = m => busyLog("mtLog", m);
   try {
     if (GIT) await flush();
     const r = GIT ? null : await (await fetch("/api/files?tab=" + encodeURIComponent(tab))).json();
@@ -735,7 +791,7 @@ async function downloadAllChapters() {
   } catch (e) { log("Ошибка: " + (e.message || e)); }
 }
 async function downloadWholeTab() {     // редактору: все главы и все строки одним .txt; обратно — «Загрузить перевод»
-  const log = m => { $("mtLog").textContent = m; };
+  const log = m => busyLog("mtLog", m);
   try {
     if (GIT) await flush();
     const r = GIT ? null : await (await fetch("/api/files?tab=" + encodeURIComponent(tab))).json();
@@ -802,8 +858,17 @@ function parseChapterTxt(t) {           // -> [имя главы, [{key, new, ed
   return [name, items];
 }
 
+let shownTab = null;                    // вкладка, чей список глав сейчас на экране (скелетон — только при смене вкладки)
 async function loadFiles() {
-  const r = GIT ? await gitFiles() : await (await fetch("/api/files?tab=" + encodeURIComponent(tab))).json();
+  const myTab = tab;                    // пока грузилось, могли нажать другую вкладку — тогда этот ответ уже не нужен
+  const fresh = shownTab !== tab || !$("files").querySelector("div[data-f]");
+  const sk = fresh ? setTimeout(() => { skelFiles(); if (!data) skelRows(10, "Загружаю вкладку…"); }, 120) : null;
+  let r;
+  try { r = GIT ? await gitFiles() : await (await fetch("/api/files?tab=" + encodeURIComponent(tab))).json(); }
+  catch (e) { if (fresh) { $("files").innerHTML = ""; if (!data) $("list").innerHTML = ""; } throw e; }   // не оставлять вечный скелетон
+  finally { clearTimeout(sk); }
+  if (myTab && tab !== myTab) return;
+  if (fresh && !data) $("list").innerHTML = "";
   if (!tab) tab = r.tabs[0];
   $("tabs").innerHTML = "";
   if (r.tabs.length > 1) for (const t of r.tabs) {
@@ -819,7 +884,7 @@ async function loadFiles() {
   }
   $("dir").textContent = r.dir;
   if (tab) loadGloss();
-  $("files").innerHTML = "";
+  $("files").innerHTML = ""; shownTab = tab;
   allFiles = r.files; tabStats = {left: {...(r.left || {})}, total: {...(r.total || {})}, mt: {...(r.mt || {})}}; showAll = false;
   const a = document.createElement("div"); a.className = "all"; a.id = "allProg"; a.onclick = () => openAll(a);
   $("files").appendChild(a); updAll();
@@ -870,7 +935,7 @@ function parseLoose(text) {             // ответ ИИ как есть: об
 async function doUpload() {
   const f0 = $("upFile").files[0], txt = $("upText").value.trim();
   if (!f0 && !txt) { $("upLog").textContent = "Вставь сырой JSON или выбери файл"; return; }
-  const b = $("upGo"); b.disabled = true; $("upLog").textContent = "Загружаю…";
+  const b = $("upGo"); b.disabled = true; busyLog("upLog", "Загружаю…");
   try {
     let f = f0, parsed = null;               // текст и не-ZIP файлы разбираем здесь, дальше уходит уже ровный JSON
     if (txt) parsed = parseLoose(txt);
@@ -917,9 +982,9 @@ async function openAll(el) {
   document.querySelectorAll("#files div").forEach(x => x.classList.remove("on")); el.classList.add("on");
   showAll = true; updBar();
   const fs = Object.keys(tabStats.left).filter(f => tabStats.left[f] > 0).sort();
-  $("list").innerHTML = `<div class="row grp"><span>Загружаю главы с непереведёнными: ${fs.length}…</span></div>`;
+  skelRows(10, `Загружаю главы с непереведёнными: 0 / ${fs.length}…`);
   allData = [];
-  for (const f of fs) { try { allData.push({file: f, doc: await loadData(f)}); } catch (e) {} }
+  for (const [k, f] of fs.entries()) { if (showAll) skelMsg(`Загружаю главы с непереведёнными: ${k + 1} / ${fs.length}…`); try { allData.push({file: f, doc: await loadData(f)}); } catch (e) {} }
   for (const {file: f, doc} of allData) { setStat(f, doc); }
   paintFiles(); saveStatsSoon();
   updAll();                             // счётчики могли устареть (допереводили после выгрузки) — по живым данным
@@ -959,7 +1024,10 @@ async function openChapterAt(f, i) {    // из общего списка: от�
 async function openFile(f, el) {
   showAll = false; $("qAll").checked = false;   // клик по главе выходит из поиска по вкладке
   document.querySelectorAll("#files div").forEach(x => x.classList.remove("on")); el.classList.add("on");
-  file = f; data = await loadData(f); if (searchDocs.tab === tab) searchDocs.map.set(f, data);
+  file = f;
+  const sk = setTimeout(() => skelRows(12, "Загружаю главу…"), 120);
+  try { data = await loadData(f); } finally { clearTimeout(sk); }
+  if (searchDocs.tab === tab) searchDocs.map.set(f, data);
   render(); pick(view[0] ?? -1);
 }
 let searchDocs = {tab: null, map: new Map()}, searchRun = 0, searchTimer = null;   // поиск по всей вкладке: главы грузятся один раз
@@ -976,7 +1044,8 @@ async function doSearch() {
   const need = allFiles.filter(f => !searchDocs.map.has(f));
   for (let i = 0; i < need.length; i += 6) {
     if (run !== searchRun) return;
-    box.innerHTML = `<div class="row grp"><span>🔎 Загружаю главы для поиска: ${Math.min(i + 6, need.length)} / ${need.length}…</span></div>`;
+    const msg = `🔎 Загружаю главы для поиска: ${Math.min(i + 6, need.length)} / ${need.length}…`;
+    if (i === 0) skelRows(10, msg); else skelMsg(msg);
     await Promise.all(need.slice(i, i + 6).map(async f => {
       for (let t = 0; t < 2; t++) { try { searchDocs.map.set(f, await loadData(f)); return; } catch (e) { await new Promise(r => setTimeout(r, 400)); } }
     }));
@@ -1710,12 +1779,12 @@ async function showRevisions() {
   m.querySelector(".msum").textContent = "Последние 10 состояний главы: перед каждой загрузкой, перед откатом и раз в 10 минут ручной правки. «Вернуть» меняет только переводы (поле «мой перевод»); текущее состояние перед этим само сохранится ревизией.";
   const close = document.createElement("button"); close.textContent = "Закрыть"; close.onclick = () => m.remove(); m.querySelector(".mbtn").appendChild(close);
   m.onclick = e => { if (e.target === m) m.remove(); };
-  box.textContent = "Загружаю…";
+  box.innerHTML = `<div><i class="spin"></i> Загружаю ревизии…</div><i class="skel" style="width:92%"></i><i class="skel" style="width:74%"></i><i class="skel" style="width:85%"></i><i class="skel" style="width:66%"></i>`;
   const revs = await listRevisions(name);
   box.textContent = revs.length ? "" : "Ревизий пока нет: они появятся после первой загрузки или правки.";
   const cur = new Map(data.lines.map(l => [String(l.key), l]));
   for (const rev of revs) {
-    const row = document.createElement("div"); row.className = "rev"; row.textContent = rev.time + " — загружаю…"; box.appendChild(row);
+    const row = document.createElement("div"); row.className = "rev"; row.textContent = " " + rev.time + " — загружаю…"; row.prepend(Object.assign(document.createElement("i"), {className: "spin"})); box.appendChild(row);
     let doc; try { doc = await rev.load(); } catch (e) { row.textContent = rev.time + " — не прочиталась"; continue; }
     const diff = doc.lines.filter(l => { const c = cur.get(String(l.key)); return c && (c.new || "") !== (l.new || ""); });
     const done = doc.lines.filter(l => l.new).length;
