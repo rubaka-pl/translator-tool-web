@@ -352,6 +352,7 @@
     <label title="строки, которые загрузка пометила как подозрительные: проверь и сохрани вручную"><input type="checkbox" id="onlyReview"> только ⚠</label>
     <label title="строки, переведённые кнопкой машинного перевода и ещё не сохранённые руками"><input type="checkbox" id="onlyMT"> машинный перевод</label>
     <input id="q" placeholder="поиск…" style="padding:4px 6px">
+    <label title="искать по всем главам вкладки (по ключу, имени, японскому и обоим переводам); клик по строке открывает главу на ней"><input type="checkbox" id="qAll"> во всех главах</label>
     <span id="st"></span>
     <div id="bar" title="сколько переведено в главе"><i></i></div>
     <select id="theme" title="тема" onchange="setTheme(this.value)"></select>
@@ -956,11 +957,65 @@ async function openChapterAt(f, i) {    // из общего списка: от�
   pick(i);
 }
 async function openFile(f, el) {
-  showAll = false;
+  showAll = false; $("qAll").checked = false;   // клик по главе выходит из поиска по вкладке
   document.querySelectorAll("#files div").forEach(x => x.classList.remove("on")); el.classList.add("on");
-  file = f; data = await loadData(f); render(); pick(view[0] ?? -1);
+  file = f; data = await loadData(f); if (searchDocs.tab === tab) searchDocs.map.set(f, data);
+  render(); pick(view[0] ?? -1);
+}
+let searchDocs = {tab: null, map: new Map()}, searchRun = 0, searchTimer = null;   // поиск по всей вкладке: главы грузятся один раз
+function searchOn() { return $("qAll").checked && $("q").value.trim().length >= 2; }
+function renderSearch() {
+  clearTimeout(searchTimer); searchTimer = setTimeout(doSearch, 250);
+}
+async function doSearch() {
+  const run = ++searchRun, q = $("q").value.trim().toLowerCase(), box = $("list");
+  if (!searchOn()) return render();
+  view = []; pick(-1);
+  if (searchDocs.tab !== tab) searchDocs = {tab, map: new Map()};
+  if (file && data) searchDocs.map.set(file, data);                    // открытая глава — живая, с несохранёнными правками
+  const need = allFiles.filter(f => !searchDocs.map.has(f));
+  for (let i = 0; i < need.length; i += 6) {
+    if (run !== searchRun) return;
+    box.innerHTML = `<div class="row grp"><span>🔎 Загружаю главы для поиска: ${Math.min(i + 6, need.length)} / ${need.length}…</span></div>`;
+    await Promise.all(need.slice(i, i + 6).map(async f => {
+      for (let t = 0; t < 2; t++) { try { searchDocs.map.set(f, await loadData(f)); return; } catch (e) { await new Promise(r => setTimeout(r, 400)); } }
+    }));
+  }
+  if (run !== searchRun || !searchOn()) return;
+  if (GIT) for (const [f, d] of searchDocs.map) { const ed = pending[dataPath(f)]; if (ed) for (const l of d.lines) if (l.key in ed) applyEdit(l, ed[l.key]); }
+  box.innerHTML = "";
+  const head = document.createElement("div"); head.className = "row head";
+  for (const t of ["Ключ", "Кто", "Японский", "Старый перевод", "Мой перевод"]) { const s = document.createElement("span"); s.textContent = t; head.appendChild(s); }
+  box.appendChild(head);
+  let total = 0, shown = 0; const LIMIT = 500;
+  for (const f of allFiles) {
+    const d = searchDocs.map.get(f); if (!d) continue;
+    const idx = d.lines.map((l, i) => i).filter(i => { const l = d.lines[i]; return [l.key, l.spk, l.jp, l.old, l.new].join(" ").toLowerCase().includes(q); });
+    if (!idx.length) continue;
+    total += idx.length;
+    if (shown >= LIMIT) continue;
+    const g = document.createElement("div"); g.className = "row grp"; g.title = "открыть главу";
+    g.innerHTML = "<span></span>"; g.firstChild.textContent = `📖 ${f} — совпадений ${idx.length}`;
+    g.onclick = () => openSearchHit(f, idx[0]); box.appendChild(g);
+    for (const i of idx) {
+      if (shown++ >= LIMIT) break;
+      const l = d.lines[i], r = document.createElement("div");
+      r.className = "row " + (l.new && !badNew(l) ? "done" : l.skip ? "skip" : todo(l) ? "todo" : ""); r.title = f;
+      r.innerHTML = `<span class="k"></span><span class="s"></span><span></span><span></span><span></span>`;
+      const c = r.children; c[0].textContent = l.key; c[1].textContent = l.spk || ""; c[2].textContent = l.jp || "";
+      c[3].textContent = l.old || ""; c[4].textContent = l.new || "";
+      r.onclick = () => openSearchHit(f, i); box.appendChild(r);
+    }
+  }
+  $("st").textContent = total ? `найдено во вкладке: ${total}` + (total > LIMIT ? ` (показаны первые ${LIMIT})` : "") : "во всей вкладке ничего не найдено";
+  if (!total) box.insertAdjacentHTML("beforeend", `<div class="row grp"><span>Во всей вкладке ничего не найдено</span></div>`);
+}
+async function openSearchHit(f, i) {    // из поиска по вкладке: открыть главу на строке (в главе остаётся тот же поиск)
+  $("qAll").checked = false;
+  await openChapterAt(f, i);
 }
 function render() {
+  if (searchOn()) return renderSearch();
   if (showAll) return renderAll();
   if (!data) return;
   const q = $("q").value.toLowerCase();
@@ -1389,6 +1444,7 @@ function updBar() {
 }
 const _render = render; render = () => { _render(); updBar(); };
 $("q").oninput = render; $("onlyTodo").onchange = () => { render(); pick(view[0] ?? -1); };
+$("qAll").onchange = () => { render(); if (!searchOn()) pick(view[0] ?? -1); };
 const _save = save; save = async next => {
   const before = cur; await _save(next);
   if (before >= 0) { const r = $("eNew").getBoundingClientRect(); sparkle(r.left + 60, r.top + 10); toast(GIT ? "запомнила, отправлю~" : "сохранено~"); }
@@ -1694,6 +1750,7 @@ const UI_BLOCKS = [
     ["onlyReview", "Фильтр «только ⚠»", "#top label:has(#onlyReview)"],
     ["onlyMT", "Фильтр «машинный перевод»", "#top label:has(#onlyMT)"],
     ["q", "Поиск", "#q"],
+    ["qAll", "Поиск «во всех главах»", "#top label:has(#qAll)"],
     ["st", "Счётчик строк", "#st"],
     ["bar", "Полоса прогресса главы", "#bar"],
     ["theme", "Выбор темы", "#theme"],
